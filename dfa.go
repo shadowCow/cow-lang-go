@@ -1,7 +1,7 @@
 package main
 
 type Dfa struct {
-	State string
+	InitialState string
 	States map[string]DfaState
 }
 
@@ -11,11 +11,11 @@ type DfaState struct {
 	DefaultTransition string
 }
 
-func (d Dfa) NextState(input rune) string {
-	transition, exists := d.States[d.State].Transitions[input]
+func (d Dfa) NextState(currentState string, input rune) string {
+	transition, exists := d.States[currentState].Transitions[input]
 
 	if !exists {
-		transition = d.States[d.State].DefaultTransition
+		transition = d.States[currentState].DefaultTransition
 	}
 
 	return transition
