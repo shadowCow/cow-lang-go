@@ -2,7 +2,7 @@ package lexer
 
 import (
 	"testing"
-	"github.com/shadowCow/cow-lang-go/automata"
+	"github.com/shadowCow/cow-lang-go/lang/automata"
 )
 
 func TestLexer(t *testing.T) {

@@ -1,6 +1,6 @@
 package lexer
 
-import "github.com/shadowCow/cow-lang-go/automata"
+import "github.com/shadowCow/cow-lang-go/lang/automata"
 
 type Lexer struct {
 	dfa automata.Dfa

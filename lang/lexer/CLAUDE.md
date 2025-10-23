@@ -8,8 +8,8 @@ This package contains data structures and algorithms for lexical analysis - tran
 ## Usage
 ```go
 import (
-    "github.com/shadowCow/cow-lang-go/lexer"
-    "github.com/shadowCow/cow-lang-go/automata"
+    "github.com/shadowCow/cow-lang-go/lang/lexer"
+    "github.com/shadowCow/cow-lang-go/lang/automata"
 )
 
 dfa := automata.CreateTestDfa()
