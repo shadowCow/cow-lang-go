@@ -1,4 +1,4 @@
-package main
+package automata
 
 import (
 	"testing"
@@ -16,7 +16,7 @@ func TestTransition(t *testing.T) {
     }
 
     for _, tc := range cases {
-        dfa := createTestDfa()
+        dfa := CreateTestDfa()
 
         nextState := dfa.NextState(dfa.InitialState, tc.input)
 

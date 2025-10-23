@@ -1,4 +1,4 @@
-package main
+package automata
 
 type Dfa struct {
 	InitialState string

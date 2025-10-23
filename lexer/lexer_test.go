@@ -1,7 +1,8 @@
-package main
+package lexer
 
 import (
 	"testing"
+	"github.com/shadowCow/cow-lang-go/automata"
 )
 
 func TestLexer(t *testing.T) {
@@ -9,12 +10,12 @@ func TestLexer(t *testing.T) {
         input string
         expectedState string
     }{
-        {"42", StateTwoName},
-        {"4get", StateThreeName},
-		{"forget", StateThreeName},
+        {"42", automata.StateTwoName},
+        {"4get", automata.StateThreeName},
+		{"forget", automata.StateThreeName},
     }
 
-	dfa := createTestDfa()
+	dfa := automata.CreateTestDfa()
 
     for _, tc := range cases {	
         lexer := Lexer{

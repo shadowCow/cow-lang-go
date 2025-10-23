@@ -1,4 +1,4 @@
-package main
+package automata
 
 const (
     StateOneName = "start"
@@ -6,7 +6,7 @@ const (
     StateThreeName = "wordic"
 )
 
-func createTestDfa() Dfa {
+func CreateTestDfa() Dfa {
 
     stateOne := DfaState{
         Name: StateOneName,
