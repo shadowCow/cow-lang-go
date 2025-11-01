@@ -1,0 +1,6 @@
+println(42)
+println(0xFF)
+println(0b1010)
+println(3.14)
+println(1.5e2)
+println(1_000_000)

@@ -12,11 +12,21 @@ const (
 	TOKEN_INT_BINARY  grammar.TokenType = "INT_BINARY"  // 0b1010, 0b1111_0000
 	TOKEN_FLOAT       grammar.TokenType = "FLOAT"       // 3.14, 1.5e10, 2e-5
 
+	// Identifiers
+	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
+
+	// Punctuation
+	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
+	TOKEN_RPAREN grammar.TokenType = "RPAREN" // )
+	TOKEN_COMMA  grammar.TokenType = "COMMA"  // ,
+
+	// Whitespace (to be skipped)
+	TOKEN_WHITESPACE grammar.TokenType = "WHITESPACE" // spaces, tabs, newlines
+
 	// TODO: Add remaining tokens for Phase 1
 	// - Keywords: TOKEN_KEYWORD_FN, TOKEN_KEYWORD_LET, TOKEN_KEYWORD_MATCH, etc.
 	// - Operators: TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, etc.
-	// - Punctuation: TOKEN_LBRACE, TOKEN_RBRACE, TOKEN_LPAREN, etc.
-	// - Identifiers: TOKEN_IDENTIFIER, TOKEN_TYPE_IDENTIFIER
+	// - More punctuation: TOKEN_LBRACE, TOKEN_RBRACE, TOKEN_SEMICOLON, etc.
 	// - String literals: TOKEN_STRING
 	// - Boolean literals: TOKEN_TRUE, TOKEN_FALSE
 )
@@ -74,8 +84,41 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 		},
 	}
 
+	// Helper patterns for identifiers
+	letter := grammar.LexAlternative{
+		grammar.CharRange{From: 'a', To: 'z'},
+		grammar.CharRange{From: 'A', To: 'Z'},
+	}
+	letterOrDigit := grammar.LexAlternative{
+		letter,
+		digit,
+		grammar.Literal("_"),
+	}
+
+	// Whitespace characters
+	whitespaceChar := grammar.LexAlternative{
+		grammar.Literal(" "),
+		grammar.Literal("\t"),
+		grammar.Literal("\n"),
+		grammar.Literal("\r"),
+	}
+
 	return grammar.LexicalGrammar{
 		Tokens: []grammar.TokenDefinition{
+			// Identifiers: must start with letter or underscore, followed by letters/digits/underscores
+			// Higher priority to match before being confused with number literals
+			{
+				Name: TOKEN_IDENTIFIER,
+				Pattern: grammar.LexSequence{
+					grammar.LexAlternative{
+						letter,
+						grammar.Literal("_"),
+					},
+					grammar.LexZeroOrMore{Inner: letterOrDigit},
+				},
+				Priority: 4,
+			},
+
 			// Number literals
 			// Note: Hex and binary have higher priority than decimal since they start with '0'
 			// Float has higher priority than decimal int to match decimal points
@@ -124,6 +167,30 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_INT_DECIMAL,
 				Pattern:  integerPart,
+				Priority: 1,
+			},
+
+			// Punctuation - single character tokens
+			{
+				Name:     TOKEN_LPAREN,
+				Pattern:  grammar.Literal("("),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_RPAREN,
+				Pattern:  grammar.Literal(")"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_COMMA,
+				Pattern:  grammar.Literal(","),
+				Priority: 1,
+			},
+
+			// Whitespace - one or more whitespace characters
+			{
+				Name:     TOKEN_WHITESPACE,
+				Pattern:  grammar.LexOneOrMore{Inner: whitespaceChar},
 				Priority: 1,
 			},
 		},
