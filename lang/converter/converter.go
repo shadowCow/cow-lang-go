@@ -205,37 +205,88 @@ func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 		// Non-terminal node - check what symbol it is
 		switch n.Symbol {
 		case "Expression":
-			// Expression: Term AddRest
-			if len(n.Children) != 2 {
-				return nil, fmt.Errorf("Expression node expected 2 children, got %d", len(n.Children))
+			// Expression: LogicalOr
+			if len(n.Children) != 1 {
+				return nil, fmt.Errorf("Expression node expected 1 child, got %d", len(n.Children))
 			}
-			// Convert the term (left operand)
-			term, err := convertToExpression(n.Children[0])
+			return convertToExpression(n.Children[0])
+
+		case "LogicalOr":
+			// LogicalOr: LogicalAnd LogicalOrRest
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("LogicalOr node expected 2 children, got %d", len(n.Children))
+			}
+			left, err := convertToExpression(n.Children[0])
 			if err != nil {
 				return nil, err
 			}
-			// Process AddRest to build binary expressions
-			return processAddRest(term, n.Children[1])
+			return processLogicalOrRest(left, n.Children[1])
+
+		case "LogicalAnd":
+			// LogicalAnd: Equality LogicalAndRest
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("LogicalAnd node expected 2 children, got %d", len(n.Children))
+			}
+			left, err := convertToExpression(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+			return processLogicalAndRest(left, n.Children[1])
+
+		case "Equality":
+			// Equality: Comparison EqualityRest
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("Equality node expected 2 children, got %d", len(n.Children))
+			}
+			left, err := convertToExpression(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+			return processEqualityRest(left, n.Children[1])
+
+		case "Comparison":
+			// Comparison: Arithmetic ComparisonRest
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("Comparison node expected 2 children, got %d", len(n.Children))
+			}
+			left, err := convertToExpression(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+			return processComparisonRest(left, n.Children[1])
+
+		case "Arithmetic":
+			// Arithmetic: Term AddRest
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("Arithmetic node expected 2 children, got %d", len(n.Children))
+			}
+			left, err := convertToExpression(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+			return processAddRest(left, n.Children[1])
 
 		case "Term":
-			// Term: Factor MulRest
+			// Term: Unary MulRest
 			if len(n.Children) != 2 {
 				return nil, fmt.Errorf("Term node expected 2 children, got %d", len(n.Children))
 			}
-			// Convert the factor (left operand)
-			factor, err := convertToExpression(n.Children[0])
+			left, err := convertToExpression(n.Children[0])
 			if err != nil {
 				return nil, err
 			}
-			// Process MulRest to build binary expressions
-			return processMulRest(factor, n.Children[1])
+			return processMulRest(left, n.Children[1])
 
-		case "Factor":
-			// Factor: IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
-			return convertFactor(n)
+		case "Unary":
+			// Unary: UnaryOp Unary | Primary
+			return convertUnary(n)
+
+		case "Primary":
+			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+			return convertPrimary(n)
 
 		case "Literal":
-			// Literal should have one child: a terminal (INT_DECIMAL, INT_HEX, etc.)
+			// Literal should have one child: a terminal
 			if len(n.Children) != 1 {
 				return nil, fmt.Errorf("Literal node expected 1 child, got %d", len(n.Children))
 			}
@@ -253,15 +304,15 @@ func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 	}
 }
 
-// convertFactor converts a Factor node to an expression.
-// Factor: IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
-func convertFactor(node *parsetree.NonTerminalNode) (ast.Expression, error) {
-	if node.Symbol != "Factor" {
-		return nil, fmt.Errorf("expected Factor, got %s", node.Symbol)
+// convertPrimary converts a Primary node to an expression.
+// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+func convertPrimary(node *parsetree.NonTerminalNode) (ast.Expression, error) {
+	if node.Symbol != "Primary" {
+		return nil, fmt.Errorf("expected Primary, got %s", node.Symbol)
 	}
 
 	if len(node.Children) == 0 {
-		return nil, fmt.Errorf("Factor node has no children")
+		return nil, fmt.Errorf("Primary node has no children")
 	}
 
 	// Check first child to determine which alternative
@@ -269,49 +320,103 @@ func convertFactor(node *parsetree.NonTerminalNode) (ast.Expression, error) {
 	case *parsetree.TerminalNode:
 		// Could be IDENTIFIER or LPAREN
 		if firstChild.Token.Type == "IDENTIFIER" {
-			// IDENTIFIER FactorRest
+			// IDENTIFIER PrimaryRest
 			if len(node.Children) != 2 {
-				return nil, fmt.Errorf("Factor IDENTIFIER variant expected 2 children, got %d", len(node.Children))
+				return nil, fmt.Errorf("Primary IDENTIFIER variant expected 2 children, got %d", len(node.Children))
 			}
 			name := firstChild.Token.Value
 			token := firstChild.Token.Value
-			return convertIdentifierFactor(name, token, node.Children[1])
+			return convertIdentifierPrimary(name, token, node.Children[1])
 		} else if firstChild.Token.Type == "LPAREN" {
 			// LPAREN Expression RPAREN
 			if len(node.Children) != 3 {
-				return nil, fmt.Errorf("Factor LPAREN variant expected 3 children, got %d", len(node.Children))
+				return nil, fmt.Errorf("Primary LPAREN variant expected 3 children, got %d", len(node.Children))
 			}
 			return convertToExpression(node.Children[1])
 		}
-		return nil, fmt.Errorf("unexpected terminal in Factor: %s", firstChild.Token.Type)
+		return nil, fmt.Errorf("unexpected terminal in Primary: %s", firstChild.Token.Type)
 
 	case *parsetree.NonTerminalNode:
 		// Literal
 		if len(node.Children) != 1 {
-			return nil, fmt.Errorf("Factor Literal variant expected 1 child, got %d", len(node.Children))
+			return nil, fmt.Errorf("Primary Literal variant expected 1 child, got %d", len(node.Children))
 		}
 		return convertToExpression(firstChild)
 
 	default:
-		return nil, fmt.Errorf("unexpected first child type in Factor: %T", firstChild)
+		return nil, fmt.Errorf("unexpected first child type in Primary: %T", firstChild)
 	}
 }
 
-// convertIdentifierFactor converts an identifier with FactorRest.
-// If FactorRest is empty, it's an Identifier.
-// If FactorRest has LPAREN, it's a FunctionCall.
-func convertIdentifierFactor(name, token string, factorRest parsetree.ParseTree) (ast.Expression, error) {
-	switch rest := factorRest.(type) {
+// convertUnary converts a Unary node to an expression.
+// Unary: UnaryOp Unary | Primary
+func convertUnary(node *parsetree.NonTerminalNode) (ast.Expression, error) {
+	if node.Symbol != "Unary" {
+		return nil, fmt.Errorf("expected Unary, got %s", node.Symbol)
+	}
+
+	if len(node.Children) == 0 {
+		return nil, fmt.Errorf("Unary node has no children")
+	}
+
+	// Check if first child is UnaryOp or Primary
+	switch firstChild := node.Children[0].(type) {
+	case *parsetree.NonTerminalNode:
+		if firstChild.Symbol == "UnaryOp" {
+			// UnaryOp Unary
+			if len(node.Children) != 2 {
+				return nil, fmt.Errorf("Unary UnaryOp variant expected 2 children, got %d", len(node.Children))
+			}
+
+			// Extract the operator
+			if len(firstChild.Children) != 1 {
+				return nil, fmt.Errorf("UnaryOp expected 1 child, got %d", len(firstChild.Children))
+			}
+			opToken, ok := firstChild.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("UnaryOp child expected to be terminal, got %T", firstChild.Children[0])
+			}
+			operator := opToken.Token.Type
+
+			// Convert the operand recursively
+			operand, err := convertToExpression(node.Children[1])
+			if err != nil {
+				return nil, err
+			}
+
+			return &ast.UnaryExpression{
+				Token:    opToken.Token.Value,
+				Operator: operator,
+				Operand:  operand,
+			}, nil
+		} else {
+			// Primary
+			if len(node.Children) != 1 {
+				return nil, fmt.Errorf("Unary Primary variant expected 1 child, got %d", len(node.Children))
+			}
+			return convertToExpression(firstChild)
+		}
+
+	default:
+		return nil, fmt.Errorf("unexpected first child type in Unary: %T", firstChild)
+	}
+}
+
+// convertIdentifierPrimary converts an identifier with PrimaryRest.
+// If PrimaryRest is empty, it's an Identifier.
+// If PrimaryRest has LPAREN, it's a FunctionCall.
+func convertIdentifierPrimary(name, token string, primaryRest parsetree.ParseTree) (ast.Expression, error) {
+	switch rest := primaryRest.(type) {
 	case *parsetree.EmptyNode:
-		// FactorRest is ε, so this is just an identifier
+		// PrimaryRest is ε, so this is just an identifier
 		return &ast.Identifier{
 			Token: token,
 			Name:  name,
 		}, nil
 
 	case *parsetree.NonTerminalNode:
-		if rest.Symbol != "FactorRest" {
-			return nil, fmt.Errorf("expected FactorRest, got %s", rest.Symbol)
+		if rest.Symbol != "PrimaryRest" {
+			return nil, fmt.Errorf("expected PrimaryRest, got %s", rest.Symbol)
 		}
 
 		// Check if it's empty (0 children) or LPAREN Arguments RPAREN (3 children)
@@ -335,10 +440,88 @@ func convertIdentifierFactor(name, token string, factorRest parsetree.ParseTree)
 				Arguments: arguments,
 			}, nil
 		}
-		return nil, fmt.Errorf("FactorRest node expected 0 or 3 children, got %d", len(rest.Children))
+		return nil, fmt.Errorf("PrimaryRest node expected 0 or 3 children, got %d", len(rest.Children))
 
 	default:
-		return nil, fmt.Errorf("unexpected node type for FactorRest: %T", factorRest)
+		return nil, fmt.Errorf("unexpected node type for PrimaryRest: %T", primaryRest)
+	}
+}
+
+// processLogicalOrRest processes a LogicalOrRest node and builds left-associative binary expressions.
+// LogicalOrRest: OR LogicalAnd LogicalOrRest | ε
+func processLogicalOrRest(left ast.Expression, rest parsetree.ParseTree) (ast.Expression, error) {
+	return processBinaryOpRest(left, rest, "LogicalOrRest", "OR")
+}
+
+// processLogicalAndRest processes a LogicalAndRest node and builds left-associative binary expressions.
+// LogicalAndRest: AND Equality LogicalAndRest | ε
+func processLogicalAndRest(left ast.Expression, rest parsetree.ParseTree) (ast.Expression, error) {
+	return processBinaryOpRest(left, rest, "LogicalAndRest", "AND")
+}
+
+// processEqualityRest processes an EqualityRest node and builds left-associative binary expressions.
+// EqualityRest: EqualityOp Comparison EqualityRest | ε
+func processEqualityRest(left ast.Expression, rest parsetree.ParseTree) (ast.Expression, error) {
+	return processBinaryOpRest(left, rest, "EqualityRest", "")
+}
+
+// processComparisonRest processes a ComparisonRest node and builds left-associative binary expressions.
+// ComparisonRest: ComparisonOp Arithmetic ComparisonRest | ε
+func processComparisonRest(left ast.Expression, rest parsetree.ParseTree) (ast.Expression, error) {
+	return processBinaryOpRest(left, rest, "ComparisonRest", "")
+}
+
+// processBinaryOpRest is a generic function for processing "Rest" nodes in the grammar.
+// It handles patterns like: Op Operand Rest | ε
+func processBinaryOpRest(left ast.Expression, rest parsetree.ParseTree, expectedSymbol, fixedOp string) (ast.Expression, error) {
+	switch r := rest.(type) {
+	case *parsetree.EmptyNode:
+		return left, nil
+
+	case *parsetree.NonTerminalNode:
+		if string(r.Symbol) != expectedSymbol {
+			return nil, fmt.Errorf("expected %s, got %s", expectedSymbol, r.Symbol)
+		}
+
+		if len(r.Children) == 0 {
+			return left, nil
+		}
+
+		if len(r.Children) != 3 {
+			return nil, fmt.Errorf("%s node expected 0 or 3 children, got %d", expectedSymbol, len(r.Children))
+		}
+
+		// Extract operator (child 0)
+		var operator string
+		if fixedOp != "" {
+			operator = fixedOp
+		} else {
+			var err error
+			operator, err = extractOperator(r.Children[0])
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Convert right operand (child 1)
+		right, err := convertToExpression(r.Children[1])
+		if err != nil {
+			return nil, err
+		}
+
+		// Build binary expression
+		binaryExpr := &ast.BinaryExpression{
+			Token:    operator,
+			Left:     left,
+			Operator: operator,
+			Right:    right,
+		}
+
+		// Process remaining rest (child 2) - builds left-associativity
+		return processBinaryOpRest(binaryExpr, r.Children[2], expectedSymbol, fixedOp)
+
+	default:
+		return nil, fmt.Errorf("unexpected node type for %s: %T", expectedSymbol, rest)
 	}
 }
 
@@ -601,6 +784,18 @@ func convertTerminalToExpression(node *parsetree.TerminalNode) (ast.Expression, 
 		return &ast.FloatLiteral{
 			Token: token.Value,
 			Value: value,
+		}, nil
+
+	case "TRUE":
+		return &ast.BoolLiteral{
+			Token: token.Value,
+			Value: true,
+		}, nil
+
+	case "FALSE":
+		return &ast.BoolLiteral{
+			Token: token.Value,
+			Value: false,
 		}, nil
 
 	default:

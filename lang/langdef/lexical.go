@@ -13,18 +13,35 @@ const (
 	TOKEN_FLOAT       grammar.TokenType = "FLOAT"       // 3.14, 1.5e10, 2e-5
 
 	// Keywords
-	TOKEN_LET grammar.TokenType = "LET" // let keyword for variable declaration
+	TOKEN_LET   grammar.TokenType = "LET"   // let keyword for variable declaration
+	TOKEN_TRUE  grammar.TokenType = "TRUE"  // true boolean literal
+	TOKEN_FALSE grammar.TokenType = "FALSE" // false boolean literal
 
 	// Identifiers
 	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
 
-	// Operators
-	TOKEN_EQUALS   grammar.TokenType = "EQUALS"   // =
+	// Arithmetic operators
 	TOKEN_PLUS     grammar.TokenType = "PLUS"     // +
 	TOKEN_MINUS    grammar.TokenType = "MINUS"    // -
 	TOKEN_MULTIPLY grammar.TokenType = "MULTIPLY" // *
 	TOKEN_DIVIDE   grammar.TokenType = "DIVIDE"   // /
 	TOKEN_MODULO   grammar.TokenType = "MODULO"   // %
+
+	// Comparison operators
+	TOKEN_EQUAL_EQUAL    grammar.TokenType = "EQUAL_EQUAL"    // ==
+	TOKEN_NOT_EQUAL      grammar.TokenType = "NOT_EQUAL"      // !=
+	TOKEN_LESS_THAN      grammar.TokenType = "LESS_THAN"      // <
+	TOKEN_LESS_EQUAL     grammar.TokenType = "LESS_EQUAL"     // <=
+	TOKEN_GREATER_THAN   grammar.TokenType = "GREATER_THAN"   // >
+	TOKEN_GREATER_EQUAL  grammar.TokenType = "GREATER_EQUAL"  // >=
+
+	// Logical operators
+	TOKEN_AND grammar.TokenType = "AND" // &&
+	TOKEN_OR  grammar.TokenType = "OR"  // ||
+	TOKEN_NOT grammar.TokenType = "NOT" // !
+
+	// Assignment
+	TOKEN_EQUALS grammar.TokenType = "EQUALS" // =
 
 	// Punctuation
 	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
@@ -117,10 +134,20 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 	return grammar.LexicalGrammar{
 		Tokens: []grammar.TokenDefinition{
 			// Keywords: must be matched before identifiers since they look like identifiers
-			// Higher priority ensures "let" is recognized as TOKEN_LET, not TOKEN_IDENTIFIER
+			// Higher priority ensures keywords are recognized, not TOKEN_IDENTIFIER
 			{
 				Name:     TOKEN_LET,
 				Pattern:  grammar.Literal("let"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_TRUE,
+				Pattern:  grammar.Literal("true"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_FALSE,
+				Pattern:  grammar.Literal("false"),
 				Priority: 5,
 			},
 
@@ -190,9 +217,61 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			},
 
 			// Operators
+			// Multi-character operators must have higher priority than single-character ones
+
+			// Comparison operators (2-character, priority 2)
+			{
+				Name:     TOKEN_EQUAL_EQUAL,
+				Pattern:  grammar.Literal("=="),
+				Priority: 2,
+			},
+			{
+				Name:     TOKEN_NOT_EQUAL,
+				Pattern:  grammar.Literal("!="),
+				Priority: 2,
+			},
+			{
+				Name:     TOKEN_LESS_EQUAL,
+				Pattern:  grammar.Literal("<="),
+				Priority: 2,
+			},
+			{
+				Name:     TOKEN_GREATER_EQUAL,
+				Pattern:  grammar.Literal(">="),
+				Priority: 2,
+			},
+
+			// Logical operators (2-character, priority 2)
+			{
+				Name:     TOKEN_AND,
+				Pattern:  grammar.Literal("&&"),
+				Priority: 2,
+			},
+			{
+				Name:     TOKEN_OR,
+				Pattern:  grammar.Literal("||"),
+				Priority: 2,
+			},
+
+			// Single-character operators (priority 1)
 			{
 				Name:     TOKEN_EQUALS,
 				Pattern:  grammar.Literal("="),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_LESS_THAN,
+				Pattern:  grammar.Literal("<"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_GREATER_THAN,
+				Pattern:  grammar.Literal(">"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_NOT,
+				Pattern:  grammar.Literal("!"),
 				Priority: 1,
 			},
 			{

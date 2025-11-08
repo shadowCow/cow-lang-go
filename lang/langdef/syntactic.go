@@ -18,15 +18,42 @@ const (
 
 	// Expressions (with operator precedence)
 	SYM_EXPRESSION grammar.Symbol = "Expression"
-	SYM_ADD_REST   grammar.Symbol = "AddRest"
-	SYM_TERM       grammar.Symbol = "Term"
-	SYM_MUL_REST   grammar.Symbol = "MulRest"
-	SYM_FACTOR     grammar.Symbol = "Factor"
-	SYM_FACTOR_REST grammar.Symbol = "FactorRest"
 
-	// Operators
-	SYM_ADD_OP grammar.Symbol = "AddOp"
-	SYM_MUL_OP grammar.Symbol = "MulOp"
+	// Logical OR (lowest precedence)
+	SYM_LOGICAL_OR      grammar.Symbol = "LogicalOr"
+	SYM_LOGICAL_OR_REST grammar.Symbol = "LogicalOrRest"
+
+	// Logical AND
+	SYM_LOGICAL_AND      grammar.Symbol = "LogicalAnd"
+	SYM_LOGICAL_AND_REST grammar.Symbol = "LogicalAndRest"
+
+	// Equality
+	SYM_EQUALITY      grammar.Symbol = "Equality"
+	SYM_EQUALITY_REST grammar.Symbol = "EqualityRest"
+	SYM_EQUALITY_OP   grammar.Symbol = "EqualityOp"
+
+	// Comparison
+	SYM_COMPARISON      grammar.Symbol = "Comparison"
+	SYM_COMPARISON_REST grammar.Symbol = "ComparisonRest"
+	SYM_COMPARISON_OP   grammar.Symbol = "ComparisonOp"
+
+	// Arithmetic (addition/subtraction)
+	SYM_ARITHMETIC grammar.Symbol = "Arithmetic"
+	SYM_ADD_REST   grammar.Symbol = "AddRest"
+	SYM_ADD_OP     grammar.Symbol = "AddOp"
+
+	// Term (multiplication/division/modulo)
+	SYM_TERM     grammar.Symbol = "Term"
+	SYM_MUL_REST grammar.Symbol = "MulRest"
+	SYM_MUL_OP   grammar.Symbol = "MulOp"
+
+	// Unary
+	SYM_UNARY    grammar.Symbol = "Unary"
+	SYM_UNARY_OP grammar.Symbol = "UnaryOp"
+
+	// Primary (highest precedence)
+	SYM_PRIMARY      grammar.Symbol = "Primary"
+	SYM_PRIMARY_REST grammar.Symbol = "PrimaryRest"
 
 	// Function calls
 	SYM_FUNCTION_CALL grammar.Symbol = "FunctionCall"
@@ -49,25 +76,41 @@ const (
 //   LetStatement -> LET IDENTIFIER EQUALS Expression
 //   ExpressionStatement -> Expression
 //
-//   Expression -> Term AddRest
+//   Expression -> LogicalOr
+//   LogicalOr -> LogicalAnd LogicalOrRest
+//   LogicalOrRest -> OR LogicalAnd LogicalOrRest | ε
+//   LogicalAnd -> Equality LogicalAndRest
+//   LogicalAndRest -> AND Equality LogicalAndRest | ε
+//   Equality -> Comparison EqualityRest
+//   EqualityRest -> EqualityOp Comparison EqualityRest | ε
+//   EqualityOp -> EQUAL_EQUAL | NOT_EQUAL
+//   Comparison -> Arithmetic ComparisonRest
+//   ComparisonRest -> ComparisonOp Arithmetic ComparisonRest | ε
+//   ComparisonOp -> LESS_THAN | LESS_EQUAL | GREATER_THAN | GREATER_EQUAL
+//   Arithmetic -> Term AddRest
 //   AddRest -> AddOp Term AddRest | ε
 //   AddOp -> PLUS | MINUS
-//
-//   Term -> Factor MulRest
-//   MulRest -> MulOp Factor MulRest | ε
+//   Term -> Unary MulRest
+//   MulRest -> MulOp Unary MulRest | ε
 //   MulOp -> MULTIPLY | DIVIDE | MODULO
-//
-//   Factor -> IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
-//   FactorRest -> LPAREN Arguments RPAREN | ε
+//   Unary -> UnaryOp Unary | Primary
+//   UnaryOp -> NOT | MINUS
+//   Primary -> IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+//   PrimaryRest -> LPAREN Arguments RPAREN | ε
 //   Arguments -> ε | ArgumentList
 //   ArgumentList -> Expression ArgumentRest
 //   ArgumentRest -> COMMA Expression ArgumentRest | ε
-//   Literal -> INT_DECIMAL | INT_HEX | INT_BINARY | FLOAT
+//   Literal -> INT_DECIMAL | INT_HEX | INT_BINARY | FLOAT | TRUE | FALSE
 //
-// Note: The grammar enforces operator precedence:
-//   - Lowest:  + - (addition, subtraction)
-//   - Higher:  * / % (multiplication, division, modulo)
-//   - Highest: literals, identifiers, function calls, parentheses
+// Note: The grammar enforces operator precedence (lowest to highest):
+//   1. || (logical or)
+//   2. && (logical and)
+//   3. == != (equality)
+//   4. < <= > >= (comparison)
+//   5. + - (addition, subtraction)
+//   6. * / % (multiplication, division, modulo)
+//   7. ! - (unary not, unary minus)
+//   8. literals, identifiers, function calls, parentheses
 func GetSyntacticGrammar() grammar.SyntacticGrammar {
 	return grammar.SyntacticGrammar{
 		StartSymbol: SYM_PROGRAM,
@@ -119,15 +162,94 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				Symbol: SYM_EXPRESSION,
 			},
 
-			// Expression: Term AddRest
-			// Handles addition and subtraction (lowest precedence)
-			SYM_EXPRESSION: grammar.SynSequence{
+			// Expression: LogicalOr
+			SYM_EXPRESSION: grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+
+			// LogicalOr: LogicalAnd LogicalOrRest
+			SYM_LOGICAL_OR: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_LOGICAL_AND},
+				grammar.NonTerminal{Symbol: SYM_LOGICAL_OR_REST},
+			},
+
+			// LogicalOrRest: OR LogicalAnd LogicalOrRest | ε
+			SYM_LOGICAL_OR_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_OR},
+					grammar.NonTerminal{Symbol: SYM_LOGICAL_AND},
+					grammar.NonTerminal{Symbol: SYM_LOGICAL_OR_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// LogicalAnd: Equality LogicalAndRest
+			SYM_LOGICAL_AND: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_EQUALITY},
+				grammar.NonTerminal{Symbol: SYM_LOGICAL_AND_REST},
+			},
+
+			// LogicalAndRest: AND Equality LogicalAndRest | ε
+			SYM_LOGICAL_AND_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_AND},
+					grammar.NonTerminal{Symbol: SYM_EQUALITY},
+					grammar.NonTerminal{Symbol: SYM_LOGICAL_AND_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// Equality: Comparison EqualityRest
+			SYM_EQUALITY: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_COMPARISON},
+				grammar.NonTerminal{Symbol: SYM_EQUALITY_REST},
+			},
+
+			// EqualityRest: EqualityOp Comparison EqualityRest | ε
+			SYM_EQUALITY_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_EQUALITY_OP},
+					grammar.NonTerminal{Symbol: SYM_COMPARISON},
+					grammar.NonTerminal{Symbol: SYM_EQUALITY_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// EqualityOp: EQUAL_EQUAL | NOT_EQUAL
+			SYM_EQUALITY_OP: grammar.SynAlternative{
+				grammar.Terminal{TokenType: TOKEN_EQUAL_EQUAL},
+				grammar.Terminal{TokenType: TOKEN_NOT_EQUAL},
+			},
+
+			// Comparison: Arithmetic ComparisonRest
+			SYM_COMPARISON: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_ARITHMETIC},
+				grammar.NonTerminal{Symbol: SYM_COMPARISON_REST},
+			},
+
+			// ComparisonRest: ComparisonOp Arithmetic ComparisonRest | ε
+			SYM_COMPARISON_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_COMPARISON_OP},
+					grammar.NonTerminal{Symbol: SYM_ARITHMETIC},
+					grammar.NonTerminal{Symbol: SYM_COMPARISON_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// ComparisonOp: LESS_THAN | LESS_EQUAL | GREATER_THAN | GREATER_EQUAL
+			SYM_COMPARISON_OP: grammar.SynAlternative{
+				grammar.Terminal{TokenType: TOKEN_LESS_THAN},
+				grammar.Terminal{TokenType: TOKEN_LESS_EQUAL},
+				grammar.Terminal{TokenType: TOKEN_GREATER_THAN},
+				grammar.Terminal{TokenType: TOKEN_GREATER_EQUAL},
+			},
+
+			// Arithmetic: Term AddRest
+			SYM_ARITHMETIC: grammar.SynSequence{
 				grammar.NonTerminal{Symbol: SYM_TERM},
 				grammar.NonTerminal{Symbol: SYM_ADD_REST},
 			},
 
 			// AddRest: AddOp Term AddRest | ε
-			// Right-recursive to handle left-associativity during evaluation
 			SYM_ADD_REST: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.NonTerminal{Symbol: SYM_ADD_OP},
@@ -143,18 +265,17 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_MINUS},
 			},
 
-			// Term: Factor MulRest
-			// Handles multiplication, division, and modulo (higher precedence)
+			// Term: Unary MulRest
 			SYM_TERM: grammar.SynSequence{
-				grammar.NonTerminal{Symbol: SYM_FACTOR},
+				grammar.NonTerminal{Symbol: SYM_UNARY},
 				grammar.NonTerminal{Symbol: SYM_MUL_REST},
 			},
 
-			// MulRest: MulOp Factor MulRest | ε
+			// MulRest: MulOp Unary MulRest | ε
 			SYM_MUL_REST: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.NonTerminal{Symbol: SYM_MUL_OP},
-					grammar.NonTerminal{Symbol: SYM_FACTOR},
+					grammar.NonTerminal{Symbol: SYM_UNARY},
 					grammar.NonTerminal{Symbol: SYM_MUL_REST},
 				},
 				grammar.SynSequence{}, // epsilon
@@ -167,12 +288,26 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_MODULO},
 			},
 
-			// Factor: IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
-			// Handles highest precedence items: atoms and parenthesized expressions
-			SYM_FACTOR: grammar.SynAlternative{
+			// Unary: UnaryOp Unary | Primary
+			SYM_UNARY: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_UNARY_OP},
+					grammar.NonTerminal{Symbol: SYM_UNARY},
+				},
+				grammar.NonTerminal{Symbol: SYM_PRIMARY},
+			},
+
+			// UnaryOp: NOT | MINUS
+			SYM_UNARY_OP: grammar.SynAlternative{
+				grammar.Terminal{TokenType: TOKEN_NOT},
+				grammar.Terminal{TokenType: TOKEN_MINUS},
+			},
+
+			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+			SYM_PRIMARY: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
-					grammar.NonTerminal{Symbol: SYM_FACTOR_REST},
+					grammar.NonTerminal{Symbol: SYM_PRIMARY_REST},
 				},
 				grammar.NonTerminal{Symbol: SYM_LITERAL},
 				grammar.SynSequence{
@@ -182,9 +317,8 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				},
 			},
 
-			// FactorRest: LPAREN Arguments RPAREN | ε
-			// Distinguishes between function calls and identifiers
-			SYM_FACTOR_REST: grammar.SynAlternative{
+			// PrimaryRest: LPAREN Arguments RPAREN | ε
+			SYM_PRIMARY_REST: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_LPAREN},
 					grammar.NonTerminal{Symbol: SYM_ARGUMENTS},
@@ -219,12 +353,14 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
-			// A literal can be any number token
+			// A literal can be a number or boolean
 			SYM_LITERAL: grammar.SynAlternative{
 				grammar.Terminal{TokenType: TOKEN_INT_DECIMAL},
 				grammar.Terminal{TokenType: TOKEN_INT_HEX},
 				grammar.Terminal{TokenType: TOKEN_INT_BINARY},
 				grammar.Terminal{TokenType: TOKEN_FLOAT},
+				grammar.Terminal{TokenType: TOKEN_TRUE},
+				grammar.Terminal{TokenType: TOKEN_FALSE},
 			},
 		},
 	}

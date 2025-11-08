@@ -95,11 +95,17 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.FloatLiteral:
 		return ex.Value, nil
 
+	case *ast.BoolLiteral:
+		return ex.Value, nil
+
 	case *ast.Identifier:
 		return e.evalIdentifier(ex)
 
 	case *ast.FunctionCall:
 		return e.evalFunctionCall(ex)
+
+	case *ast.UnaryExpression:
+		return e.evalUnaryExpression(ex)
 
 	case *ast.BinaryExpression:
 		return e.evalBinaryExpression(ex)
@@ -151,6 +157,8 @@ func (e *Evaluator) println(value interface{}) error {
 		str = fmt.Sprintf("%d\n", v)
 	case float64:
 		str = fmt.Sprintf("%g\n", v)
+	case bool:
+		str = fmt.Sprintf("%t\n", v)
 	default:
 		return fmt.Errorf("cannot print value of type %T", value)
 	}
@@ -159,34 +167,83 @@ func (e *Evaluator) println(value interface{}) error {
 	return err
 }
 
-// evalBinaryExpression evaluates a binary expression (e.g., 1 + 2, x * y).
+// evalUnaryExpression evaluates a unary expression (e.g., !true, -5).
+func (e *Evaluator) evalUnaryExpression(expr *ast.UnaryExpression) (interface{}, error) {
+	// Evaluate the operand
+	operand, err := e.evalExpression(expr.Operand)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating operand of %s: %v", expr.Operator, err)
+	}
+
+	switch expr.Operator {
+	case "NOT", "!":
+		// Logical NOT
+		boolVal, ok := operand.(bool)
+		if !ok {
+			return nil, fmt.Errorf("logical NOT operator requires boolean operand, got %T", operand)
+		}
+		return !boolVal, nil
+
+	case "MINUS", "-":
+		// Unary minus
+		switch v := operand.(type) {
+		case int64:
+			return -v, nil
+		case float64:
+			return -v, nil
+		default:
+			return nil, fmt.Errorf("unary minus operator requires numeric operand, got %T", operand)
+		}
+
+	default:
+		return nil, fmt.Errorf("unknown unary operator: %s", expr.Operator)
+	}
+}
+
+// evalBinaryExpression evaluates a binary expression.
+// Handles arithmetic, comparison, equality, and logical operators.
 func (e *Evaluator) evalBinaryExpression(expr *ast.BinaryExpression) (interface{}, error) {
-	// Evaluate left operand
+	// For logical operators (&&, ||), use short-circuit evaluation
+	if expr.Operator == "AND" || expr.Operator == "&&" {
+		return e.evalLogicalAnd(expr)
+	}
+	if expr.Operator == "OR" || expr.Operator == "||" {
+		return e.evalLogicalOr(expr)
+	}
+
+	// For other operators, evaluate both operands
 	leftVal, err := e.evalExpression(expr.Left)
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating left operand of %s: %v", expr.Operator, err)
 	}
 
-	// Evaluate right operand
 	rightVal, err := e.evalExpression(expr.Right)
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating right operand of %s: %v", expr.Operator, err)
 	}
 
-	// Type coercion: if one operand is float, convert both to float
+	// Handle equality operators (work on any type)
+	if expr.Operator == "EQUAL_EQUAL" || expr.Operator == "==" {
+		return e.evalEquality(leftVal, rightVal), nil
+	}
+	if expr.Operator == "NOT_EQUAL" || expr.Operator == "!=" {
+		return !e.evalEquality(leftVal, rightVal), nil
+	}
+
+	// Handle comparison and arithmetic operators (require numeric types)
 	leftInt, leftIsInt := leftVal.(int64)
 	leftFloat, leftIsFloat := leftVal.(float64)
 	rightInt, rightIsInt := rightVal.(int64)
 	rightFloat, rightIsFloat := rightVal.(float64)
 
 	if !leftIsInt && !leftIsFloat {
-		return nil, fmt.Errorf("left operand of %s has invalid type: %T", expr.Operator, leftVal)
+		return nil, fmt.Errorf("left operand of %s has invalid type: %T (expected number)", expr.Operator, leftVal)
 	}
 	if !rightIsInt && !rightIsFloat {
-		return nil, fmt.Errorf("right operand of %s has invalid type: %T", expr.Operator, rightVal)
+		return nil, fmt.Errorf("right operand of %s has invalid type: %T (expected number)", expr.Operator, rightVal)
 	}
 
-	// If either operand is float, do float arithmetic
+	// If either operand is float, do float operations
 	if leftIsFloat || rightIsFloat {
 		var left, right float64
 		if leftIsFloat {
@@ -202,51 +259,145 @@ func (e *Evaluator) evalBinaryExpression(expr *ast.BinaryExpression) (interface{
 		return e.evalFloatBinaryOp(left, right, expr.Operator)
 	}
 
-	// Both are integers - do integer arithmetic
+	// Both are integers
 	return e.evalIntBinaryOp(leftInt, rightInt, expr.Operator)
 }
 
-// evalIntBinaryOp performs integer binary operations.
+// evalIntBinaryOp performs integer binary operations (arithmetic and comparison).
 func (e *Evaluator) evalIntBinaryOp(left, right int64, operator string) (interface{}, error) {
 	switch operator {
-	case "+":
+	// Arithmetic operators
+	case "PLUS", "+":
 		return left + right, nil
-	case "-":
+	case "MINUS", "-":
 		return left - right, nil
-	case "*":
+	case "MULTIPLY", "*":
 		return left * right, nil
-	case "/":
+	case "DIVIDE", "/":
 		if right == 0 {
 			return nil, fmt.Errorf("division by zero")
 		}
 		return left / right, nil
-	case "%":
+	case "MODULO", "%":
 		if right == 0 {
 			return nil, fmt.Errorf("modulo by zero")
 		}
 		return left % right, nil
+
+	// Comparison operators
+	case "LESS_THAN", "<":
+		return left < right, nil
+	case "LESS_EQUAL", "<=":
+		return left <= right, nil
+	case "GREATER_THAN", ">":
+		return left > right, nil
+	case "GREATER_EQUAL", ">=":
+		return left >= right, nil
+
 	default:
 		return nil, fmt.Errorf("unknown binary operator: %s", operator)
 	}
 }
 
-// evalFloatBinaryOp performs floating-point binary operations.
+// evalFloatBinaryOp performs floating-point binary operations (arithmetic and comparison).
 func (e *Evaluator) evalFloatBinaryOp(left, right float64, operator string) (interface{}, error) {
 	switch operator {
-	case "+":
+	// Arithmetic operators
+	case "PLUS", "+":
 		return left + right, nil
-	case "-":
+	case "MINUS", "-":
 		return left - right, nil
-	case "*":
+	case "MULTIPLY", "*":
 		return left * right, nil
-	case "/":
+	case "DIVIDE", "/":
 		if right == 0.0 {
 			return nil, fmt.Errorf("division by zero")
 		}
 		return left / right, nil
-	case "%":
+	case "MODULO", "%":
 		return nil, fmt.Errorf("modulo operator not supported for floating-point numbers")
+
+	// Comparison operators
+	case "LESS_THAN", "<":
+		return left < right, nil
+	case "LESS_EQUAL", "<=":
+		return left <= right, nil
+	case "GREATER_THAN", ">":
+		return left > right, nil
+	case "GREATER_EQUAL", ">=":
+		return left >= right, nil
+
 	default:
 		return nil, fmt.Errorf("unknown binary operator: %s", operator)
 	}
+}
+
+// evalLogicalAnd evaluates logical AND with short-circuit evaluation.
+func (e *Evaluator) evalLogicalAnd(expr *ast.BinaryExpression) (interface{}, error) {
+	// Evaluate left operand
+	leftVal, err := e.evalExpression(expr.Left)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating left operand of &&: %v", err)
+	}
+
+	leftBool, ok := leftVal.(bool)
+	if !ok {
+		return nil, fmt.Errorf("logical AND requires boolean operands, got %T", leftVal)
+	}
+
+	// Short-circuit: if left is false, return false without evaluating right
+	if !leftBool {
+		return false, nil
+	}
+
+	// Left is true, evaluate right
+	rightVal, err := e.evalExpression(expr.Right)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating right operand of &&: %v", err)
+	}
+
+	rightBool, ok := rightVal.(bool)
+	if !ok {
+		return nil, fmt.Errorf("logical AND requires boolean operands, got %T", rightVal)
+	}
+
+	return rightBool, nil
+}
+
+// evalLogicalOr evaluates logical OR with short-circuit evaluation.
+func (e *Evaluator) evalLogicalOr(expr *ast.BinaryExpression) (interface{}, error) {
+	// Evaluate left operand
+	leftVal, err := e.evalExpression(expr.Left)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating left operand of ||: %v", err)
+	}
+
+	leftBool, ok := leftVal.(bool)
+	if !ok {
+		return nil, fmt.Errorf("logical OR requires boolean operands, got %T", leftVal)
+	}
+
+	// Short-circuit: if left is true, return true without evaluating right
+	if leftBool {
+		return true, nil
+	}
+
+	// Left is false, evaluate right
+	rightVal, err := e.evalExpression(expr.Right)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating right operand of ||: %v", err)
+	}
+
+	rightBool, ok := rightVal.(bool)
+	if !ok {
+		return nil, fmt.Errorf("logical OR requires boolean operands, got %T", rightVal)
+	}
+
+	return rightBool, nil
+}
+
+// evalEquality checks if two values are equal.
+// Works on any type.
+func (e *Evaluator) evalEquality(left, right interface{}) bool {
+	return left == right
 }

@@ -74,6 +74,15 @@ type FloatLiteral struct {
 func (fl *FloatLiteral) expressionNode()      {}
 func (fl *FloatLiteral) TokenLiteral() string { return fl.Token }
 
+// BoolLiteral represents a boolean literal (true or false).
+type BoolLiteral struct {
+	Token string // The token text ("true" or "false")
+	Value bool   // The boolean value
+}
+
+func (bl *BoolLiteral) expressionNode()      {}
+func (bl *BoolLiteral) TokenLiteral() string { return bl.Token }
+
 // FunctionCall represents a function call expression.
 type FunctionCall struct {
 	Token     string       // The function name token
@@ -93,13 +102,25 @@ type Identifier struct {
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token }
 
-// BinaryExpression represents a binary operation (e.g., 1 + 2, x * 3).
+// BinaryExpression represents a binary operation.
+// Handles arithmetic (+, -, *, /, %), comparison (<, >, <=, >=),
+// equality (==, !=), and logical (&&, ||) operators.
 type BinaryExpression struct {
 	Token    string     // The operator token
 	Left     Expression // The left operand
-	Operator string     // The operator (+, -, *, /, %)
+	Operator string     // The operator
 	Right    Expression // The right operand
 }
 
 func (be *BinaryExpression) expressionNode()      {}
 func (be *BinaryExpression) TokenLiteral() string { return be.Token }
+
+// UnaryExpression represents a unary operation (e.g., !true, -5).
+type UnaryExpression struct {
+	Token    string     // The operator token
+	Operator string     // The operator (!, -)
+	Operand  Expression // The operand
+}
+
+func (ue *UnaryExpression) expressionNode()      {}
+func (ue *UnaryExpression) TokenLiteral() string { return ue.Token }
