@@ -1,7 +1,7 @@
 package ll1
 
 import (
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // FollowSets holds the FOLLOW sets for all non-terminals in a grammar.

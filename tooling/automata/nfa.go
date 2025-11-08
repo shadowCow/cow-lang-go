@@ -1,6 +1,6 @@
 package automata
 
-import "github.com/shadowCow/cow-lang-go/lang/grammar"
+import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 // NFA represents a non-deterministic finite automaton.
 // NFAs can have multiple transitions for the same input symbol,

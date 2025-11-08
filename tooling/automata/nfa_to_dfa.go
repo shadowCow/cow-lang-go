@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // NFAToDFA converts an NFA to a DFA using subset construction.

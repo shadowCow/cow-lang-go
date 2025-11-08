@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/shadowCow/cow-lang-go/lang/automata"
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/automata"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // TestSimplePattern tests compiling a very simple pattern.

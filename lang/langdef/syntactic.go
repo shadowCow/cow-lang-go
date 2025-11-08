@@ -1,6 +1,6 @@
 package langdef
 
-import "github.com/shadowCow/cow-lang-go/lang/grammar"
+import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 // Non-terminal symbol constants for the Cow language syntactic grammar.
 // These represent the structural elements of the language.

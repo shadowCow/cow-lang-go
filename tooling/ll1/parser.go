@@ -3,41 +3,47 @@ package ll1
 import (
 	"fmt"
 
-	"github.com/shadowCow/cow-lang-go/lang/ast"
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
-	"github.com/shadowCow/cow-lang-go/lang/lexer"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/lexer"
+	"github.com/shadowCow/cow-lang-go/tooling/parsetree"
 )
 
-// Parser implements a table-driven LL(1) parser.
+// Parser implements a table-driven LL(1) parser that returns generic parse trees.
 type Parser struct {
-	table   *ParseTable
-	grammar grammar.SyntacticGrammar
-	tokens  []lexer.Token
-	pos     int // Current position in token stream
-	// Optional: trace parsing steps for debugging
-	trace bool
+	table         *ParseTable
+	grammar       grammar.SyntacticGrammar
+	tokens        []lexer.Token
+	pos           int    // Current position in token stream
+	trace         bool   // Optional: trace parsing steps for debugging
+	filterToken   string // Token type to filter (e.g., "WHITESPACE"), empty for no filtering
 }
 
 // NewParser creates a new LL(1) parser.
+// filterToken specifies a token type to filter out (e.g., "WHITESPACE"), or empty string for no filtering.
 func NewParser(
 	table *ParseTable,
 	grammar grammar.SyntacticGrammar,
 	tokens []lexer.Token,
+	filterToken string,
 ) *Parser {
-	// Filter out whitespace tokens
-	filtered := make([]lexer.Token, 0, len(tokens))
-	for _, tok := range tokens {
-		if tok.Type != "WHITESPACE" {
-			filtered = append(filtered, tok)
+	// Filter tokens if specified
+	filtered := tokens
+	if filterToken != "" {
+		filtered = make([]lexer.Token, 0, len(tokens))
+		for _, tok := range tokens {
+			if tok.Type != filterToken {
+				filtered = append(filtered, tok)
+			}
 		}
 	}
 
 	return &Parser{
-		table:   table,
-		grammar: grammar,
-		tokens:  filtered,
-		pos:     0,
-		trace:   false,
+		table:       table,
+		grammar:     grammar,
+		tokens:      filtered,
+		pos:         0,
+		trace:       false,
+		filterToken: filterToken,
 	}
 }
 
@@ -46,18 +52,17 @@ func (p *Parser) SetTrace(enabled bool) {
 	p.trace = enabled
 }
 
-// Parse parses the token stream and returns an AST.
-func (p *Parser) Parse() (*ast.Program, error) {
-	// The stack holds symbols to be processed
-	// We push the start symbol initially
+// Parse parses the token stream and returns a generic parse tree.
+func (p *Parser) Parse() (*parsetree.ProgramNode, error) {
+	// The stack holds symbols to be processed and their corresponding parse tree nodes
 	stack := []stackItem{
 		{symbol: symbolEOF, isTerminal: true},
 		{symbol: string(p.grammar.StartSymbol), isTerminal: false},
 	}
 
-	// Track AST nodes as we parse
-	// For the simple grammar, we'll build a Program with one statement
-	var programStatements []ast.Statement
+	// Stack for building parse tree nodes
+	// As we reduce, we pop children and create parent nodes
+	var nodeStack []parsetree.ParseTree
 
 	for len(stack) > 0 {
 		// Pop top of stack
@@ -76,8 +81,14 @@ func (p *Parser) Parse() (*ast.Program, error) {
 			if top.symbol == symbolEOF {
 				// Expect end of input
 				if p.pos >= len(p.tokens) {
-					// Success!
-					break
+					// Success! Build final program node
+					if len(nodeStack) == 0 {
+						return nil, fmt.Errorf("parse completed but no parse tree was built")
+					}
+					if len(nodeStack) > 1 {
+						return nil, fmt.Errorf("parse completed but multiple trees remain: %d", len(nodeStack))
+					}
+					return &parsetree.ProgramNode{Root: nodeStack[0]}, nil
 				}
 				return nil, fmt.Errorf("unexpected token %q at line %d, column %d (expected end of input)",
 					p.tokens[p.pos].Value, p.tokens[p.pos].Line, p.tokens[p.pos].Column)
@@ -94,17 +105,12 @@ func (p *Parser) Parse() (*ast.Program, error) {
 					currentToken.Value, currentToken.Type, currentToken.Line, currentToken.Column, top.symbol)
 			}
 
-			// Build AST node for this terminal
-			astNode, err := p.buildASTForTerminal(currentToken)
-			if err != nil {
-				return nil, err
-			}
-			if astNode != nil {
-				// Wrap in expression statement and add to program
-				programStatements = append(programStatements, &ast.ExpressionStatement{
-					Token:      currentToken.Value,
-					Expression: astNode,
-				})
+			// Create terminal parse tree node
+			terminalNode := &parsetree.TerminalNode{Token: currentToken}
+			nodeStack = append(nodeStack, terminalNode)
+
+			if p.trace {
+				fmt.Printf("  Matched terminal: %s\n", terminalNode.String())
 			}
 
 			// Match successful, advance input
@@ -129,24 +135,79 @@ func (p *Parser) Parse() (*ast.Program, error) {
 				fmt.Printf("  Expanding %s -> %s\n", nonTerminal, formatProduction(production))
 			}
 
-			// Expand production by pushing its symbols onto stack (in reverse order)
+			// Count how many symbols this production will add
 			symbols := p.extractSymbols(production)
+			childCount := len(symbols)
+
+			// Mark this position so we know how many children to collect
+			// We'll use a marker item to track this
+			stack = append(stack, stackItem{
+				symbol:     top.symbol,
+				isTerminal: false,
+				isMarker:   true,
+				childCount: childCount,
+			})
+
+			// Expand production by pushing its symbols onto stack (in reverse order)
 			for i := len(symbols) - 1; i >= 0; i-- {
 				stack = append(stack, symbols[i])
+			}
+
+			// Handle empty productions
+			if childCount == 0 {
+				// Pop the marker we just added
+				stack = stack[:len(stack)-1]
+				// Create an empty node
+				emptyNode := &parsetree.EmptyNode{Symbol: nonTerminal}
+				nodeStack = append(nodeStack, emptyNode)
+				if p.trace {
+					fmt.Printf("  Created empty node for %s\n", nonTerminal)
+				}
+			}
+		}
+
+		// Check if we need to reduce (found a marker)
+		// Keep reducing while there are markers at the top of the stack
+		for len(stack) > 0 && stack[len(stack)-1].isMarker {
+			marker := stack[len(stack)-1]
+			stack = stack[:len(stack)-1] // Pop marker
+
+			// Collect children from node stack
+			if len(nodeStack) < marker.childCount {
+				return nil, fmt.Errorf("internal error: not enough nodes to reduce %s (need %d, have %d)",
+					marker.symbol, marker.childCount, len(nodeStack))
+			}
+
+			// Pop children in reverse order (they were pushed in order)
+			children := make([]parsetree.ParseTree, marker.childCount)
+			for i := marker.childCount - 1; i >= 0; i-- {
+				children[i] = nodeStack[len(nodeStack)-1]
+				nodeStack = nodeStack[:len(nodeStack)-1]
+			}
+
+			// Create non-terminal node
+			nonTerminalNode := &parsetree.NonTerminalNode{
+				Symbol:   grammar.Symbol(marker.symbol),
+				Children: children,
+			}
+			nodeStack = append(nodeStack, nonTerminalNode)
+
+			if p.trace {
+				fmt.Printf("  Reduced to %s with %d children\n", marker.symbol, marker.childCount)
 			}
 		}
 	}
 
-	// Return the constructed program
-	return &ast.Program{
-		Statements: programStatements,
-	}, nil
+	// Should not reach here if grammar is correct
+	return nil, fmt.Errorf("parsing incomplete")
 }
 
 // stackItem represents an item on the parse stack.
 type stackItem struct {
 	symbol     string
 	isTerminal bool
+	isMarker   bool // True if this is a reduction marker
+	childCount int  // Number of children to reduce (only for markers)
 }
 
 const symbolEOF = "$"
@@ -199,93 +260,4 @@ func (p *Parser) extractSymbols(prod grammar.ProductionRule) []stackItem {
 	default:
 		panic(fmt.Sprintf("unknown production type: %T", prod))
 	}
-}
-
-// buildASTForTerminal creates an AST node for a matched terminal.
-func (p *Parser) buildASTForTerminal(token lexer.Token) (ast.Expression, error) {
-	switch token.Type {
-	case "INT_DECIMAL", "INT_HEX", "INT_BINARY":
-		value, err := parseIntLiteral(token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse integer at line %d, column %d: %v",
-				token.Line, token.Column, err)
-		}
-		return &ast.IntLiteral{
-			Token: token.Value,
-			Value: value,
-		}, nil
-
-	case "FLOAT":
-		value, err := parseFloatLiteral(token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse float at line %d, column %d: %v",
-				token.Line, token.Column, err)
-		}
-		return &ast.FloatLiteral{
-			Token: token.Value,
-			Value: value,
-		}, nil
-
-	default:
-		// For other terminals (keywords, operators, etc.), we may not build AST nodes
-		return nil, nil
-	}
-}
-
-// parseIntLiteral parses an integer literal token value.
-// Handles decimal, hexadecimal, and binary formats.
-func parseIntLiteral(token lexer.Token) (int64, error) {
-	// Remove underscores (used for readability in literals)
-	value := removeUnderscores(token.Value)
-
-	switch token.Type {
-	case "INT_DECIMAL":
-		var result int64
-		_, err := fmt.Sscanf(value, "%d", &result)
-		return result, err
-	case "INT_HEX":
-		// Remove "0x" prefix
-		if len(value) < 3 {
-			return 0, fmt.Errorf("invalid hex literal: %s", token.Value)
-		}
-		var result int64
-		_, err := fmt.Sscanf(value[2:], "%x", &result)
-		return result, err
-	case "INT_BINARY":
-		// Remove "0b" prefix and parse binary
-		if len(value) < 3 {
-			return 0, fmt.Errorf("invalid binary literal: %s", token.Value)
-		}
-		var result int64
-		for _, ch := range value[2:] {
-			result = result * 2
-			if ch == '1' {
-				result++
-			} else if ch != '0' {
-				return 0, fmt.Errorf("invalid binary digit: %c", ch)
-			}
-		}
-		return result, nil
-	default:
-		return 0, fmt.Errorf("unknown integer token type: %s", token.Type)
-	}
-}
-
-// parseFloatLiteral parses a float literal token value.
-func parseFloatLiteral(token lexer.Token) (float64, error) {
-	value := removeUnderscores(token.Value)
-	var result float64
-	_, err := fmt.Sscanf(value, "%f", &result)
-	return result, err
-}
-
-// removeUnderscores removes all underscore characters from a string.
-func removeUnderscores(s string) string {
-	result := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		if s[i] != '_' {
-			result = append(result, s[i])
-		}
-	}
-	return string(result)
 }

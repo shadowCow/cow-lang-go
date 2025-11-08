@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // PrintFirstSets prints the FIRST sets in a readable format.

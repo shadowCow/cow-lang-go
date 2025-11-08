@@ -3,7 +3,7 @@
 package ll1
 
 import (
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // FirstSets holds the FIRST sets for all symbols in a grammar.

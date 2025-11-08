@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/shadowCow/cow-lang-go/lang/automata"
+	"github.com/shadowCow/cow-lang-go/tooling/automata"
 )
 
 // Token represents a lexical token with its type, value, and position.

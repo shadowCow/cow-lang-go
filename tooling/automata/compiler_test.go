@@ -3,7 +3,7 @@ package automata
 import (
 	"testing"
 
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // TestCompileLiteral tests compiling a simple literal pattern to NFA.

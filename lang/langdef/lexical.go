@@ -1,6 +1,6 @@
 package langdef
 
-import "github.com/shadowCow/cow-lang-go/lang/grammar"
+import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 // Token type constants for the Cow language.
 // These will be expanded as the language grammar is defined.

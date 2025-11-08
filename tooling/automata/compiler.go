@@ -1,6 +1,6 @@
 package automata
 
-import "github.com/shadowCow/cow-lang-go/lang/grammar"
+import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 // CompilePatternToNFA converts a LexicalPattern into an NFA using Thompson's construction.
 // Each pattern type is converted into a simple NFA fragment, then combined.

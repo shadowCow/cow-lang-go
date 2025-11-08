@@ -6,11 +6,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/shadowCow/cow-lang-go/lang/automata"
+	"github.com/shadowCow/cow-lang-go/lang/converter"
 	"github.com/shadowCow/cow-lang-go/lang/eval"
 	"github.com/shadowCow/cow-lang-go/lang/langdef"
-	"github.com/shadowCow/cow-lang-go/lang/lexer"
-	"github.com/shadowCow/cow-lang-go/lang/ll1"
+	"github.com/shadowCow/cow-lang-go/tooling/automata"
+	"github.com/shadowCow/cow-lang-go/tooling/lexer"
+	"github.com/shadowCow/cow-lang-go/tooling/ll1"
 )
 
 // Run executes a Cow language program from a file.
@@ -67,14 +68,20 @@ func Run(filePath string, output io.Writer, debug bool) error {
 		return fmt.Errorf("lexer error in %q: %w", filePath, err)
 	}
 
-	// Parse tokens into an AST using LL(1) parser
-	p := ll1.NewParser(parseTable, synGrammar, tokens)
+	// Parse tokens into a generic parse tree using LL(1) parser
+	p := ll1.NewParser(parseTable, synGrammar, tokens, "WHITESPACE")
 	if debug {
 		p.SetTrace(true) // Enable parse tracing in debug mode
 	}
-	program, err := p.Parse()
+	parseTree, err := p.Parse()
 	if err != nil {
 		return fmt.Errorf("parser error in %q: %w", filePath, err)
+	}
+
+	// Convert parse tree to Cow-specific AST
+	program, err := converter.ParseTreeToAST(parseTree)
+	if err != nil {
+		return fmt.Errorf("AST conversion error in %q: %w", filePath, err)
 	}
 
 	// Evaluate the program

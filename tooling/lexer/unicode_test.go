@@ -3,8 +3,8 @@ package lexer
 import (
 	"testing"
 
-	"github.com/shadowCow/cow-lang-go/lang/automata"
-	"github.com/shadowCow/cow-lang-go/lang/grammar"
+	"github.com/shadowCow/cow-lang-go/tooling/automata"
+	"github.com/shadowCow/cow-lang-go/tooling/grammar"
 )
 
 // TestUnicodeSupport tests that the lexer correctly handles Unicode characters.

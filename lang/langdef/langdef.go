@@ -4,7 +4,7 @@
 // combining type safety, functional programming, event-driven architecture,
 // and explicit resource bounds.
 //
-// This package uses the grammar framework (github.com/shadowCow/cow-lang-go/lang/grammar)
+// This package uses the grammar framework (github.com/shadowCow/cow-lang-go/tooling/grammar)
 // to define both lexical and syntactic rules for the language.
 //
 // Current Status: Phase 1 Planning
@@ -12,7 +12,7 @@
 // See lang/design/ directory for language design documentation.
 package langdef
 
-import "github.com/shadowCow/cow-lang-go/lang/grammar"
+import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 // Grammar represents the complete grammar definition for the Cow language,
 // including both lexical (tokenization) and syntactic (parsing) rules.

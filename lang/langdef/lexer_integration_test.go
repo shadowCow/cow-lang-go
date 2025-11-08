@@ -3,8 +3,8 @@ package langdef
 import (
 	"testing"
 
-	"github.com/shadowCow/cow-lang-go/lang/automata"
-	"github.com/shadowCow/cow-lang-go/lang/lexer"
+	"github.com/shadowCow/cow-lang-go/tooling/automata"
+	"github.com/shadowCow/cow-lang-go/tooling/lexer"
 )
 
 // TestLexNumberLiterals tests lexing number literals from the Cow language grammar.
