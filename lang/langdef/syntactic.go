@@ -7,7 +7,8 @@ import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 const (
 	// Top-level program structure
-	SYM_PROGRAM grammar.Symbol = "Program"
+	SYM_PROGRAM      grammar.Symbol = "Program"
+	SYM_PROGRAM_REST grammar.Symbol = "ProgramRest"
 
 	// Expressions
 	SYM_EXPRESSION grammar.Symbol = "Expression"
@@ -26,7 +27,8 @@ const (
 // This defines how tokens are organized into language constructs.
 //
 // Grammar (LL(1) - left-factored):
-//   Program -> Expression
+//   Program -> Expression ProgramRest
+//   ProgramRest -> Expression ProgramRest | ε
 //   Expression -> FunctionCall | Literal
 //   FunctionCall -> IDENTIFIER LPAREN Arguments RPAREN
 //   Arguments -> ε | ArgumentList
@@ -37,9 +39,21 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 	return grammar.SyntacticGrammar{
 		StartSymbol: SYM_PROGRAM,
 		Productions: map[grammar.Symbol]grammar.ProductionRule{
-			// Program is a single expression
-			SYM_PROGRAM: grammar.NonTerminal{
-				Symbol: SYM_EXPRESSION,
+			// Program is a sequence of expressions
+			SYM_PROGRAM: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+				grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
+			},
+
+			// ProgramRest: Expression ProgramRest | ε
+			// Handles multiple expressions in a program
+			SYM_PROGRAM_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+					grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
+				},
+				// Empty - no more expressions (epsilon)
+				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
 			// Expression can be a function call or a literal

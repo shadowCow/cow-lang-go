@@ -28,23 +28,70 @@ func ParseTreeToAST(tree *parsetree.ProgramNode) (*ast.Program, error) {
 	}
 
 	// Process the root based on the Cow grammar
-	// Current grammar: Program -> Literal
+	// Current grammar: Program -> Expression ProgramRest
 	if rootNonTerminal.Symbol == "Program" {
-		// Program should have one child: Literal
-		if len(rootNonTerminal.Children) != 1 {
-			return nil, fmt.Errorf("Program node expected 1 child, got %d", len(rootNonTerminal.Children))
+		// Program should have two children: Expression and ProgramRest
+		if len(rootNonTerminal.Children) != 2 {
+			return nil, fmt.Errorf("Program node expected 2 children, got %d", len(rootNonTerminal.Children))
 		}
 
-		// Convert the child to a statement
+		// Convert the first expression to a statement
 		stmt, err := convertToStatement(rootNonTerminal.Children[0])
 		if err != nil {
 			return nil, err
 		}
-
 		program.Statements = append(program.Statements, stmt)
+
+		// Extract remaining expressions from ProgramRest
+		restStmts, err := extractProgramRest(rootNonTerminal.Children[1])
+		if err != nil {
+			return nil, err
+		}
+		program.Statements = append(program.Statements, restStmts...)
 	}
 
 	return program, nil
+}
+
+// extractProgramRest extracts remaining statements from a ProgramRest node.
+// ProgramRest: Expression ProgramRest | ε
+func extractProgramRest(node parsetree.ParseTree) ([]ast.Statement, error) {
+	switch n := node.(type) {
+	case *parsetree.EmptyNode:
+		// No more expressions (epsilon)
+		return []ast.Statement{}, nil
+
+	case *parsetree.NonTerminalNode:
+		if n.Symbol != "ProgramRest" {
+			return nil, fmt.Errorf("expected ProgramRest, got %s", n.Symbol)
+		}
+
+		// Could be empty (0 children) or Expression ProgramRest (2 children)
+		if len(n.Children) == 0 {
+			// Empty - no more expressions
+			return []ast.Statement{}, nil
+		} else if len(n.Children) == 2 {
+			// Expression ProgramRest
+			// Convert the expression (index 0) to a statement
+			stmt, err := convertToStatement(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+
+			// Recursively extract rest
+			restStmts, err := extractProgramRest(n.Children[1])
+			if err != nil {
+				return nil, err
+			}
+
+			return append([]ast.Statement{stmt}, restStmts...), nil
+		}
+
+		return nil, fmt.Errorf("ProgramRest node expected 0 or 2 children, got %d", len(n.Children))
+
+	default:
+		return nil, fmt.Errorf("unexpected node type for ProgramRest: %T", node)
+	}
 }
 
 // convertToStatement converts a parse tree node to a Cow statement.
