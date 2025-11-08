@@ -2,6 +2,7 @@ package ll1
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -9,9 +10,9 @@ import (
 )
 
 // PrintFirstSets prints the FIRST sets in a readable format.
-func PrintFirstSets(firstSets *FirstSets) {
-	fmt.Println("FIRST SETS:")
-	fmt.Println("===========")
+func PrintFirstSets(firstSets *FirstSets, out io.Writer) {
+	fmt.Fprintln(out, "FIRST SETS:")
+	fmt.Fprintln(out, "===========")
 
 	// Get all symbols and sort for consistent output
 	var symbols []string
@@ -35,15 +36,15 @@ func PrintFirstSets(firstSets *FirstSets) {
 			}
 		}
 
-		fmt.Printf("  FIRST(%s) = {%s}%s\n", symbol, strings.Join(terminals, ", "), nullable)
+		fmt.Fprintf(out, "  FIRST(%s) = {%s}%s\n", symbol, strings.Join(terminals, ", "), nullable)
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 }
 
 // PrintFollowSets prints the FOLLOW sets in a readable format.
-func PrintFollowSets(followSets *FollowSets) {
-	fmt.Println("FOLLOW SETS:")
-	fmt.Println("============")
+func PrintFollowSets(followSets *FollowSets, out io.Writer) {
+	fmt.Fprintln(out, "FOLLOW SETS:")
+	fmt.Fprintln(out, "============")
 
 	// Get all non-terminals and sort for consistent output
 	var symbols []grammar.Symbol
@@ -62,18 +63,18 @@ func PrintFollowSets(followSets *FollowSets) {
 		}
 		sort.Strings(terminals)
 
-		fmt.Printf("  FOLLOW(%s) = {%s}\n", symbol, strings.Join(terminals, ", "))
+		fmt.Fprintf(out, "  FOLLOW(%s) = {%s}\n", symbol, strings.Join(terminals, ", "))
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 }
 
 // PrintParseTable prints the LL(1) parse table as a grid.
-func PrintParseTable(table *ParseTable) {
-	fmt.Println("LL(1) PARSE TABLE:")
-	fmt.Println("==================")
+func PrintParseTable(table *ParseTable, out io.Writer) {
+	fmt.Fprintln(out, "LL(1) PARSE TABLE:")
+	fmt.Fprintln(out, "==================")
 
 	if len(table.nonTerminals) == 0 || len(table.terminals) == 0 {
-		fmt.Println("  (empty table)")
+		fmt.Fprintln(out, "  (empty table)")
 		return
 	}
 
@@ -104,22 +105,22 @@ func PrintParseTable(table *ParseTable) {
 	}
 
 	// Print header row
-	fmt.Printf("  %*s |", ntColWidth, "")
+	fmt.Fprintf(out, "  %*s |", ntColWidth, "")
 	for _, term := range terminals {
-		fmt.Printf(" %-*s |", termColWidth, term)
+		fmt.Fprintf(out, " %-*s |", termColWidth, term)
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 
 	// Print separator
-	fmt.Printf("  %s-+", strings.Repeat("-", ntColWidth))
+	fmt.Fprintf(out, "  %s-+", strings.Repeat("-", ntColWidth))
 	for range terminals {
-		fmt.Printf("-%s-+", strings.Repeat("-", termColWidth))
+		fmt.Fprintf(out, "-%s-+", strings.Repeat("-", termColWidth))
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 
 	// Print table rows
 	for _, nt := range nonTerminals {
-		fmt.Printf("  %-*s |", ntColWidth, nt)
+		fmt.Fprintf(out, "  %-*s |", ntColWidth, nt)
 		for _, term := range terminals {
 			key := tableKey{grammar.Symbol(nt), term}
 			if prod, exists := table.table[key]; exists {
@@ -127,14 +128,14 @@ func PrintParseTable(table *ParseTable) {
 				if len(prodStr) > termColWidth {
 					prodStr = prodStr[:termColWidth-2] + ".."
 				}
-				fmt.Printf(" %-*s |", termColWidth, prodStr)
+				fmt.Fprintf(out, " %-*s |", termColWidth, prodStr)
 			} else {
-				fmt.Printf(" %-*s |", termColWidth, "")
+				fmt.Fprintf(out, " %-*s |", termColWidth, "")
 			}
 		}
-		fmt.Println()
+		fmt.Fprintln(out, "")
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 }
 
 // formatProductionShort returns a short string representation of a production.
@@ -171,11 +172,11 @@ func formatProductionShort(prod grammar.ProductionRule) string {
 }
 
 // PrintGrammar prints the grammar in a readable format.
-func PrintGrammar(g grammar.SyntacticGrammar) {
-	fmt.Println("GRAMMAR:")
-	fmt.Println("========")
-	fmt.Printf("Start symbol: %s\n\n", g.StartSymbol)
-	fmt.Println("Productions:")
+func PrintGrammar(g grammar.SyntacticGrammar, out io.Writer) {
+	fmt.Fprintln(out, "GRAMMAR:")
+	fmt.Fprintln(out, "========")
+	fmt.Fprintf(out, "Start symbol: %s\n\n", g.StartSymbol)
+	fmt.Fprintln(out, "Productions:")
 
 	// Sort non-terminals for consistent output
 	var symbols []grammar.Symbol
@@ -188,9 +189,9 @@ func PrintGrammar(g grammar.SyntacticGrammar) {
 
 	for _, symbol := range symbols {
 		production := g.Productions[symbol]
-		fmt.Printf("  %s -> %s\n", symbol, formatProduction(production))
+		fmt.Fprintf(out, "  %s -> %s\n", symbol, formatProduction(production))
 	}
-	fmt.Println()
+	fmt.Fprintln(out, "")
 }
 
 // PrintParseTrace prints a trace of the parsing process.
@@ -205,10 +206,10 @@ func NewParseTracer() *ParseTracer {
 }
 
 // Step prints a parse step.
-func (pt *ParseTracer) Step(stack []string, input string, action string) {
+func (pt *ParseTracer) Step(stack []string, input string, action string, out io.Writer) {
 	pt.stepNum++
-	fmt.Printf("Step %d:\n", pt.stepNum)
-	fmt.Printf("  Stack:  [%s]\n", strings.Join(stack, ", "))
-	fmt.Printf("  Input:  %s\n", input)
-	fmt.Printf("  Action: %s\n\n", action)
+	fmt.Fprintf(out, "Step %d:\n", pt.stepNum)
+	fmt.Fprintf(out, "  Stack:  [%s]\n", strings.Join(stack, ", "))
+	fmt.Fprintf(out, "  Input:  %s\n", input)
+	fmt.Fprintf(out, "  Action: %s\n\n", action)
 }

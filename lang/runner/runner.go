@@ -33,19 +33,19 @@ func Run(filePath string, output io.Writer, debug bool) error {
 
 	// Debug: Print grammar
 	if debug {
-		ll1.PrintGrammar(synGrammar)
+		ll1.PrintGrammar(synGrammar, output)
 	}
 
 	// Compute FIRST sets
 	firstSets := ll1.ComputeFirstSets(synGrammar)
 	if debug {
-		ll1.PrintFirstSets(firstSets)
+		ll1.PrintFirstSets(firstSets, output)
 	}
 
 	// Compute FOLLOW sets
 	followSets := ll1.ComputeFollowSets(synGrammar, firstSets)
 	if debug {
-		ll1.PrintFollowSets(followSets)
+		ll1.PrintFollowSets(followSets, output)
 	}
 
 	// Build LL(1) parse table
@@ -54,7 +54,7 @@ func Run(filePath string, output io.Writer, debug bool) error {
 		return fmt.Errorf("failed to build LL(1) parse table: %w", err)
 	}
 	if debug {
-		ll1.PrintParseTable(parseTable)
+		ll1.PrintParseTable(parseTable, output)
 	}
 
 	// Compile the lexical grammar to a DFA
