@@ -7,17 +7,26 @@ import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 const (
 	// Top-level program structure
-	SYM_PROGRAM      grammar.Symbol = "Program"
-	SYM_PROGRAM_REST grammar.Symbol = "ProgramRest"
+	SYM_PROGRAM       grammar.Symbol = "Program"
+	SYM_PROGRAM_REST  grammar.Symbol = "ProgramRest"
+	SYM_PROGRAM_REST2 grammar.Symbol = "ProgramRest2"
 
 	// Statements
 	SYM_STATEMENT            grammar.Symbol = "Statement"
 	SYM_LET_STATEMENT        grammar.Symbol = "LetStatement"
 	SYM_EXPRESSION_STATEMENT grammar.Symbol = "ExpressionStatement"
 
-	// Expressions
-	SYM_EXPRESSION      grammar.Symbol = "Expression"
-	SYM_EXPRESSION_REST grammar.Symbol = "ExpressionRest"
+	// Expressions (with operator precedence)
+	SYM_EXPRESSION grammar.Symbol = "Expression"
+	SYM_ADD_REST   grammar.Symbol = "AddRest"
+	SYM_TERM       grammar.Symbol = "Term"
+	SYM_MUL_REST   grammar.Symbol = "MulRest"
+	SYM_FACTOR     grammar.Symbol = "Factor"
+	SYM_FACTOR_REST grammar.Symbol = "FactorRest"
+
+	// Operators
+	SYM_ADD_OP grammar.Symbol = "AddOp"
+	SYM_MUL_OP grammar.Symbol = "MulOp"
 
 	// Function calls
 	SYM_FUNCTION_CALL grammar.Symbol = "FunctionCall"
@@ -32,22 +41,33 @@ const (
 // GetSyntacticGrammar returns the syntactic grammar for the Cow language.
 // This defines how tokens are organized into language constructs.
 //
-// Grammar (LL(1) - left-factored):
+// Grammar (LL(1) - left-factored with operator precedence):
 //   Program -> Statement ProgramRest
-//   ProgramRest -> Statement ProgramRest | ε
+//   ProgramRest -> NEWLINE ProgramRest2 | ε
+//   ProgramRest2 -> Statement ProgramRest | ε
 //   Statement -> LetStatement | ExpressionStatement
 //   LetStatement -> LET IDENTIFIER EQUALS Expression
 //   ExpressionStatement -> Expression
-//   Expression -> IDENTIFIER ExpressionRest | Literal
-//   ExpressionRest -> LPAREN Arguments RPAREN | ε
+//
+//   Expression -> Term AddRest
+//   AddRest -> AddOp Term AddRest | ε
+//   AddOp -> PLUS | MINUS
+//
+//   Term -> Factor MulRest
+//   MulRest -> MulOp Factor MulRest | ε
+//   MulOp -> MULTIPLY | DIVIDE | MODULO
+//
+//   Factor -> IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
+//   FactorRest -> LPAREN Arguments RPAREN | ε
 //   Arguments -> ε | ArgumentList
 //   ArgumentList -> Expression ArgumentRest
 //   ArgumentRest -> COMMA Expression ArgumentRest | ε
 //   Literal -> INT_DECIMAL | INT_HEX | INT_BINARY | FLOAT
 //
-// Note: IDENTIFIER ExpressionRest is left-factored to handle both:
-//   - FunctionCall: IDENTIFIER LPAREN Arguments RPAREN (when ExpressionRest has LPAREN)
-//   - Identifier: IDENTIFIER (when ExpressionRest is ε)
+// Note: The grammar enforces operator precedence:
+//   - Lowest:  + - (addition, subtraction)
+//   - Higher:  * / % (multiplication, division, modulo)
+//   - Highest: literals, identifiers, function calls, parentheses
 func GetSyntacticGrammar() grammar.SyntacticGrammar {
 	return grammar.SyntacticGrammar{
 		StartSymbol: SYM_PROGRAM,
@@ -58,14 +78,25 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
 			},
 
-			// ProgramRest: Statement ProgramRest | ε
-			// Handles multiple statements in a program
+			// ProgramRest: NEWLINE ProgramRest2 | ε
+			// Handles newline-separated statements, allowing trailing newlines
 			SYM_PROGRAM_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_NEWLINE},
+					grammar.NonTerminal{Symbol: SYM_PROGRAM_REST2},
+				},
+				// Empty - no more statements (epsilon)
+				grammar.SynSequence{}, // empty sequence = epsilon
+			},
+
+			// ProgramRest2: Statement ProgramRest | ε
+			// Continues the statement sequence or allows trailing newline
+			SYM_PROGRAM_REST2: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.NonTerminal{Symbol: SYM_STATEMENT},
 					grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
 				},
-				// Empty - no more statements (epsilon)
+				// Empty - allows trailing newline (epsilon)
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
@@ -88,26 +119,78 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				Symbol: SYM_EXPRESSION,
 			},
 
-			// Expression: IDENTIFIER ExpressionRest | Literal
-			// This is left-factored to distinguish between function calls and identifiers
-			SYM_EXPRESSION: grammar.SynAlternative{
-				grammar.SynSequence{
-					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
-					grammar.NonTerminal{Symbol: SYM_EXPRESSION_REST},
-				},
-				grammar.NonTerminal{Symbol: SYM_LITERAL},
+			// Expression: Term AddRest
+			// Handles addition and subtraction (lowest precedence)
+			SYM_EXPRESSION: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_TERM},
+				grammar.NonTerminal{Symbol: SYM_ADD_REST},
 			},
 
-			// ExpressionRest: LPAREN Arguments RPAREN | ε
-			// If LPAREN, it's a function call; if ε, it's just an identifier
-			SYM_EXPRESSION_REST: grammar.SynAlternative{
+			// AddRest: AddOp Term AddRest | ε
+			// Right-recursive to handle left-associativity during evaluation
+			SYM_ADD_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_ADD_OP},
+					grammar.NonTerminal{Symbol: SYM_TERM},
+					grammar.NonTerminal{Symbol: SYM_ADD_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// AddOp: PLUS | MINUS
+			SYM_ADD_OP: grammar.SynAlternative{
+				grammar.Terminal{TokenType: TOKEN_PLUS},
+				grammar.Terminal{TokenType: TOKEN_MINUS},
+			},
+
+			// Term: Factor MulRest
+			// Handles multiplication, division, and modulo (higher precedence)
+			SYM_TERM: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_FACTOR},
+				grammar.NonTerminal{Symbol: SYM_MUL_REST},
+			},
+
+			// MulRest: MulOp Factor MulRest | ε
+			SYM_MUL_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_MUL_OP},
+					grammar.NonTerminal{Symbol: SYM_FACTOR},
+					grammar.NonTerminal{Symbol: SYM_MUL_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// MulOp: MULTIPLY | DIVIDE | MODULO
+			SYM_MUL_OP: grammar.SynAlternative{
+				grammar.Terminal{TokenType: TOKEN_MULTIPLY},
+				grammar.Terminal{TokenType: TOKEN_DIVIDE},
+				grammar.Terminal{TokenType: TOKEN_MODULO},
+			},
+
+			// Factor: IDENTIFIER FactorRest | Literal | LPAREN Expression RPAREN
+			// Handles highest precedence items: atoms and parenthesized expressions
+			SYM_FACTOR: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+					grammar.NonTerminal{Symbol: SYM_FACTOR_REST},
+				},
+				grammar.NonTerminal{Symbol: SYM_LITERAL},
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_LPAREN},
+					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+					grammar.Terminal{TokenType: TOKEN_RPAREN},
+				},
+			},
+
+			// FactorRest: LPAREN Arguments RPAREN | ε
+			// Distinguishes between function calls and identifiers
+			SYM_FACTOR_REST: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_LPAREN},
 					grammar.NonTerminal{Symbol: SYM_ARGUMENTS},
 					grammar.Terminal{TokenType: TOKEN_RPAREN},
 				},
-				// Empty - just an identifier (epsilon)
-				grammar.SynSequence{}, // empty sequence = epsilon
+				grammar.SynSequence{}, // epsilon
 			},
 
 			// Arguments: optional argument list

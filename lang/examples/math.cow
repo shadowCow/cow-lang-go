@@ -1,0 +1,22 @@
+let a = 10 + 5
+println(a)
+let b = 20 - 3
+println(b)
+let c = 4 * 7
+println(c)
+let d = 100 / 4
+println(d)
+let e = 17 % 5
+println(e)
+let f = 2 + 3 * 4
+println(f)
+let g = (2 + 3) * 4
+println(g)
+let h = 10 / 2 + 3
+println(h)
+let x = 3.14 * 2
+println(x)
+let y = 10 + 2.5
+println(y)
+let z = 100 / 3
+println(z)

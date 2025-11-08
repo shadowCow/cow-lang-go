@@ -101,6 +101,9 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.FunctionCall:
 		return e.evalFunctionCall(ex)
 
+	case *ast.BinaryExpression:
+		return e.evalBinaryExpression(ex)
+
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -154,4 +157,96 @@ func (e *Evaluator) println(value interface{}) error {
 
 	_, err := e.output.Write([]byte(str))
 	return err
+}
+
+// evalBinaryExpression evaluates a binary expression (e.g., 1 + 2, x * y).
+func (e *Evaluator) evalBinaryExpression(expr *ast.BinaryExpression) (interface{}, error) {
+	// Evaluate left operand
+	leftVal, err := e.evalExpression(expr.Left)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating left operand of %s: %v", expr.Operator, err)
+	}
+
+	// Evaluate right operand
+	rightVal, err := e.evalExpression(expr.Right)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating right operand of %s: %v", expr.Operator, err)
+	}
+
+	// Type coercion: if one operand is float, convert both to float
+	leftInt, leftIsInt := leftVal.(int64)
+	leftFloat, leftIsFloat := leftVal.(float64)
+	rightInt, rightIsInt := rightVal.(int64)
+	rightFloat, rightIsFloat := rightVal.(float64)
+
+	if !leftIsInt && !leftIsFloat {
+		return nil, fmt.Errorf("left operand of %s has invalid type: %T", expr.Operator, leftVal)
+	}
+	if !rightIsInt && !rightIsFloat {
+		return nil, fmt.Errorf("right operand of %s has invalid type: %T", expr.Operator, rightVal)
+	}
+
+	// If either operand is float, do float arithmetic
+	if leftIsFloat || rightIsFloat {
+		var left, right float64
+		if leftIsFloat {
+			left = leftFloat
+		} else {
+			left = float64(leftInt)
+		}
+		if rightIsFloat {
+			right = rightFloat
+		} else {
+			right = float64(rightInt)
+		}
+		return e.evalFloatBinaryOp(left, right, expr.Operator)
+	}
+
+	// Both are integers - do integer arithmetic
+	return e.evalIntBinaryOp(leftInt, rightInt, expr.Operator)
+}
+
+// evalIntBinaryOp performs integer binary operations.
+func (e *Evaluator) evalIntBinaryOp(left, right int64, operator string) (interface{}, error) {
+	switch operator {
+	case "+":
+		return left + right, nil
+	case "-":
+		return left - right, nil
+	case "*":
+		return left * right, nil
+	case "/":
+		if right == 0 {
+			return nil, fmt.Errorf("division by zero")
+		}
+		return left / right, nil
+	case "%":
+		if right == 0 {
+			return nil, fmt.Errorf("modulo by zero")
+		}
+		return left % right, nil
+	default:
+		return nil, fmt.Errorf("unknown binary operator: %s", operator)
+	}
+}
+
+// evalFloatBinaryOp performs floating-point binary operations.
+func (e *Evaluator) evalFloatBinaryOp(left, right float64, operator string) (interface{}, error) {
+	switch operator {
+	case "+":
+		return left + right, nil
+	case "-":
+		return left - right, nil
+	case "*":
+		return left * right, nil
+	case "/":
+		if right == 0.0 {
+			return nil, fmt.Errorf("division by zero")
+		}
+		return left / right, nil
+	case "%":
+		return nil, fmt.Errorf("modulo operator not supported for floating-point numbers")
+	default:
+		return nil, fmt.Errorf("unknown binary operator: %s", operator)
+	}
 }

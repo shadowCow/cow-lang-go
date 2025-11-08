@@ -19,15 +19,21 @@ const (
 	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
 
 	// Operators
-	TOKEN_EQUALS grammar.TokenType = "EQUALS" // =
+	TOKEN_EQUALS   grammar.TokenType = "EQUALS"   // =
+	TOKEN_PLUS     grammar.TokenType = "PLUS"     // +
+	TOKEN_MINUS    grammar.TokenType = "MINUS"    // -
+	TOKEN_MULTIPLY grammar.TokenType = "MULTIPLY" // *
+	TOKEN_DIVIDE   grammar.TokenType = "DIVIDE"   // /
+	TOKEN_MODULO   grammar.TokenType = "MODULO"   // %
 
 	// Punctuation
 	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
 	TOKEN_RPAREN grammar.TokenType = "RPAREN" // )
 	TOKEN_COMMA  grammar.TokenType = "COMMA"  // ,
 
-	// Whitespace (to be skipped)
-	TOKEN_WHITESPACE grammar.TokenType = "WHITESPACE" // spaces, tabs, newlines
+	// Whitespace and separators
+	TOKEN_NEWLINE    grammar.TokenType = "NEWLINE"    // \n (statement separator)
+	TOKEN_WHITESPACE grammar.TokenType = "WHITESPACE" // spaces, tabs (to be skipped)
 
 	// TODO: Add remaining tokens for Phase 1
 	// - Keywords: TOKEN_KEYWORD_FN, TOKEN_KEYWORD_LET, TOKEN_KEYWORD_MATCH, etc.
@@ -101,11 +107,10 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 		grammar.Literal("_"),
 	}
 
-	// Whitespace characters
-	whitespaceChar := grammar.LexAlternative{
+	// Whitespace characters (non-newline)
+	nonNewlineWhitespace := grammar.LexAlternative{
 		grammar.Literal(" "),
 		grammar.Literal("\t"),
-		grammar.Literal("\n"),
 		grammar.Literal("\r"),
 	}
 
@@ -190,6 +195,31 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 				Pattern:  grammar.Literal("="),
 				Priority: 1,
 			},
+			{
+				Name:     TOKEN_PLUS,
+				Pattern:  grammar.Literal("+"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_MINUS,
+				Pattern:  grammar.Literal("-"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_MULTIPLY,
+				Pattern:  grammar.Literal("*"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_DIVIDE,
+				Pattern:  grammar.Literal("/"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_MODULO,
+				Pattern:  grammar.Literal("%"),
+				Priority: 1,
+			},
 
 			// Punctuation - single character tokens
 			{
@@ -208,10 +238,17 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 				Priority: 1,
 			},
 
-			// Whitespace - one or more whitespace characters
+			// Newline - statement separator (higher priority than whitespace)
+			{
+				Name:     TOKEN_NEWLINE,
+				Pattern:  grammar.LexOneOrMore{Inner: grammar.Literal("\n")},
+				Priority: 2,
+			},
+
+			// Whitespace - one or more non-newline whitespace characters
 			{
 				Name:     TOKEN_WHITESPACE,
-				Pattern:  grammar.LexOneOrMore{Inner: whitespaceChar},
+				Pattern:  grammar.LexOneOrMore{Inner: nonNewlineWhitespace},
 				Priority: 1,
 			},
 		},

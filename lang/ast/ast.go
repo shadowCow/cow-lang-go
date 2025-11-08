@@ -92,3 +92,14 @@ type Identifier struct {
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token }
+
+// BinaryExpression represents a binary operation (e.g., 1 + 2, x * 3).
+type BinaryExpression struct {
+	Token    string     // The operator token
+	Left     Expression // The left operand
+	Operator string     // The operator (+, -, *, /, %)
+	Right    Expression // The right operand
+}
+
+func (be *BinaryExpression) expressionNode()      {}
+func (be *BinaryExpression) TokenLiteral() string { return be.Token }
