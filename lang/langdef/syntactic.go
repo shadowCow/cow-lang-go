@@ -353,7 +353,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
-			// A literal can be a number or boolean
+			// A literal can be a number, boolean, or string
 			SYM_LITERAL: grammar.SynAlternative{
 				grammar.Terminal{TokenType: TOKEN_INT_DECIMAL},
 				grammar.Terminal{TokenType: TOKEN_INT_HEX},
@@ -361,6 +361,8 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_FLOAT},
 				grammar.Terminal{TokenType: TOKEN_TRUE},
 				grammar.Terminal{TokenType: TOKEN_FALSE},
+				grammar.Terminal{TokenType: TOKEN_STRING},
+				grammar.Terminal{TokenType: TOKEN_RAW_STRING},
 			},
 		},
 	}

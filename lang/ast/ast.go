@@ -83,6 +83,17 @@ type BoolLiteral struct {
 func (bl *BoolLiteral) expressionNode()      {}
 func (bl *BoolLiteral) TokenLiteral() string { return bl.Token }
 
+// StringLiteral represents a string literal.
+// For regular strings ("..."), escape sequences are processed.
+// For raw strings (`...`), the value is taken as-is.
+type StringLiteral struct {
+	Token string // The token text (e.g., "hello", `world`)
+	Value string // The processed string value
+}
+
+func (sl *StringLiteral) expressionNode()      {}
+func (sl *StringLiteral) TokenLiteral() string { return sl.Token }
+
 // FunctionCall represents a function call expression.
 type FunctionCall struct {
 	Token     string       // The function name token

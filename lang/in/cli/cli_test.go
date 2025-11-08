@@ -42,6 +42,11 @@ func TestCLIWithExamples(t *testing.T) {
 			args:     []string{"cow-lang", "../../examples/booleans.cow"},
 			expected: "true\nfalse\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n",
 		},
+		{
+			name:     "strings",
+			args:     []string{"cow-lang", "../../examples/strings.cow"},
+			expected: "hello\nworld\nhello world\nline1\nline2\ntab\there\nquote: \"\nbackslash: \\\nraw string with \\n no escape\nmulti\nline\nraw string\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\napplepie\ntrue\n",
+		},
 	}
 
 	for _, tt := range tests {

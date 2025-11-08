@@ -798,6 +798,28 @@ func convertTerminalToExpression(node *parsetree.TerminalNode) (ast.Expression, 
 			Value: false,
 		}, nil
 
+	case "STRING":
+		value, err := parseStringLiteral(token.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse string at line %d, column %d: %w",
+				token.Line, token.Column, err)
+		}
+		return &ast.StringLiteral{
+			Token: token.Value,
+			Value: value,
+		}, nil
+
+	case "RAW_STRING":
+		value, err := parseRawStringLiteral(token.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse raw string at line %d, column %d: %w",
+				token.Line, token.Column, err)
+		}
+		return &ast.StringLiteral{
+			Token: token.Value,
+			Value: value,
+		}, nil
+
 	default:
 		return nil, fmt.Errorf("unexpected terminal token type in expression: %s", token.Type)
 	}
@@ -846,4 +868,52 @@ func removeUnderscores(s string) string {
 		}
 	}
 	return string(result)
+}
+
+// parseStringLiteral parses a regular string literal, processing escape sequences.
+// The input value includes the surrounding quotes (e.g., "hello\nworld").
+// Returns the string content with escape sequences resolved.
+func parseStringLiteral(value string) (string, error) {
+	// Remove surrounding quotes
+	if len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
+		return "", fmt.Errorf("invalid string literal: %s", value)
+	}
+	content := value[1 : len(value)-1]
+
+	// Process escape sequences
+	result := make([]byte, 0, len(content))
+	for i := 0; i < len(content); i++ {
+		if content[i] == '\\' && i+1 < len(content) {
+			// Process escape sequence
+			switch content[i+1] {
+			case 'n':
+				result = append(result, '\n')
+			case 't':
+				result = append(result, '\t')
+			case 'r':
+				result = append(result, '\r')
+			case '\\':
+				result = append(result, '\\')
+			case '"':
+				result = append(result, '"')
+			default:
+				return "", fmt.Errorf("invalid escape sequence: \\%c", content[i+1])
+			}
+			i++ // Skip the next character
+		} else {
+			result = append(result, content[i])
+		}
+	}
+	return string(result), nil
+}
+
+// parseRawStringLiteral parses a raw string literal (backtick-delimited).
+// The input value includes the surrounding backticks (e.g., `hello\nworld`).
+// Returns the string content as-is, without processing escape sequences.
+func parseRawStringLiteral(value string) (string, error) {
+	// Remove surrounding backticks
+	if len(value) < 2 || value[0] != '`' || value[len(value)-1] != '`' {
+		return "", fmt.Errorf("invalid raw string literal: %s", value)
+	}
+	return value[1 : len(value)-1], nil
 }

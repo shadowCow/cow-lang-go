@@ -1,0 +1,36 @@
+let a = "hello"
+println(a)
+let b = "world"
+println(b)
+let c = a + " " + b
+println(c)
+let d = "line1\nline2"
+println(d)
+let e = "tab\there"
+println(e)
+let f = "quote: \""
+println(f)
+let g = "backslash: \\"
+println(g)
+let h = `raw string with \n no escape`
+println(h)
+let i = `multi
+line
+raw string`
+println(i)
+let j = "abc" == "abc"
+println(j)
+let k = "abc" != "xyz"
+println(k)
+let l = "abc" < "xyz"
+println(l)
+let m = "xyz" > "abc"
+println(m)
+let n = "abc" <= "abc"
+println(n)
+let o = "xyz" >= "xyz"
+println(o)
+let p = "apple" + "pie"
+println(p)
+let q = "a" < "b"
+println(q)

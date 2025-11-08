@@ -12,6 +12,10 @@ const (
 	TOKEN_INT_BINARY  grammar.TokenType = "INT_BINARY"  // 0b1010, 0b1111_0000
 	TOKEN_FLOAT       grammar.TokenType = "FLOAT"       // 3.14, 1.5e10, 2e-5
 
+	// String literals
+	TOKEN_STRING     grammar.TokenType = "STRING"     // "..." with escape sequences
+	TOKEN_RAW_STRING grammar.TokenType = "RAW_STRING" // `...` raw string
+
 	// Keywords
 	TOKEN_LET   grammar.TokenType = "LET"   // let keyword for variable declaration
 	TOKEN_TRUE  grammar.TokenType = "TRUE"  // true boolean literal
@@ -149,6 +153,47 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 				Name:     TOKEN_FALSE,
 				Pattern:  grammar.Literal("false"),
 				Priority: 5,
+			},
+
+			// String literals
+			// Regular strings with escape sequences: "..."
+			{
+				Name: TOKEN_STRING,
+				Pattern: grammar.LexSequence{
+					grammar.Literal("\""),
+					grammar.LexZeroOrMore{
+						Inner: grammar.LexAlternative{
+							// Escape sequence: \ followed by n, t, r, \, or "
+							grammar.LexSequence{
+								grammar.Literal("\\"),
+								grammar.LexAlternative{
+									grammar.Literal("n"),
+									grammar.Literal("t"),
+									grammar.Literal("r"),
+									grammar.Literal("\\"),
+									grammar.Literal("\""),
+								},
+							},
+							// Any character except ", \, or newline
+							grammar.AnyCharExcept{'"', '\\', '\n'},
+						},
+					},
+					grammar.Literal("\""),
+				},
+				Priority: 3,
+			},
+
+			// Raw strings (can span multiple lines): `...`
+			{
+				Name: TOKEN_RAW_STRING,
+				Pattern: grammar.LexSequence{
+					grammar.Literal("`"),
+					grammar.LexZeroOrMore{
+						Inner: grammar.AnyCharExcept{'`'},
+					},
+					grammar.Literal("`"),
+				},
+				Priority: 3,
 			},
 
 			// Identifiers: must start with letter or underscore, followed by letters/digits/underscores

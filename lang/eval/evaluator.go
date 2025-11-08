@@ -98,6 +98,9 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.BoolLiteral:
 		return ex.Value, nil
 
+	case *ast.StringLiteral:
+		return ex.Value, nil
+
 	case *ast.Identifier:
 		return e.evalIdentifier(ex)
 
@@ -159,6 +162,8 @@ func (e *Evaluator) println(value interface{}) error {
 		str = fmt.Sprintf("%g\n", v)
 	case bool:
 		str = fmt.Sprintf("%t\n", v)
+	case string:
+		str = fmt.Sprintf("%s\n", v)
 	default:
 		return fmt.Errorf("cannot print value of type %T", value)
 	}
@@ -228,6 +233,18 @@ func (e *Evaluator) evalBinaryExpression(expr *ast.BinaryExpression) (interface{
 	}
 	if expr.Operator == "NOT_EQUAL" || expr.Operator == "!=" {
 		return !e.evalEquality(leftVal, rightVal), nil
+	}
+
+	// Handle string operations
+	leftStr, leftIsStr := leftVal.(string)
+	rightStr, rightIsStr := rightVal.(string)
+	if leftIsStr || rightIsStr {
+		// If one operand is a string, both must be strings
+		if !leftIsStr || !rightIsStr {
+			return nil, fmt.Errorf("type mismatch: cannot use %s operator with %T and %T",
+				expr.Operator, leftVal, rightVal)
+		}
+		return e.evalStringBinaryOp(leftStr, rightStr, expr.Operator)
 	}
 
 	// Handle comparison and arithmetic operators (require numeric types)
@@ -394,6 +411,28 @@ func (e *Evaluator) evalLogicalOr(expr *ast.BinaryExpression) (interface{}, erro
 	}
 
 	return rightBool, nil
+}
+
+// evalStringBinaryOp performs string binary operations (concatenation and comparison).
+func (e *Evaluator) evalStringBinaryOp(left, right string, operator string) (interface{}, error) {
+	switch operator {
+	// Concatenation
+	case "PLUS", "+":
+		return left + right, nil
+
+	// Comparison operators (lexicographic)
+	case "LESS_THAN", "<":
+		return left < right, nil
+	case "LESS_EQUAL", "<=":
+		return left <= right, nil
+	case "GREATER_THAN", ">":
+		return left > right, nil
+	case "GREATER_EQUAL", ">=":
+		return left >= right, nil
+
+	default:
+		return nil, fmt.Errorf("operator %s not supported for strings", operator)
+	}
 }
 
 // evalEquality checks if two values are equal.
