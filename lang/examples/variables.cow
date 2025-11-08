@@ -1,0 +1,6 @@
+let x = 42
+println(x)
+let y = 0xFF
+println(y)
+let z = 3.14
+println(z)

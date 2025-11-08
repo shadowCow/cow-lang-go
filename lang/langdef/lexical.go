@@ -12,8 +12,14 @@ const (
 	TOKEN_INT_BINARY  grammar.TokenType = "INT_BINARY"  // 0b1010, 0b1111_0000
 	TOKEN_FLOAT       grammar.TokenType = "FLOAT"       // 3.14, 1.5e10, 2e-5
 
+	// Keywords
+	TOKEN_LET grammar.TokenType = "LET" // let keyword for variable declaration
+
 	// Identifiers
 	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
+
+	// Operators
+	TOKEN_EQUALS grammar.TokenType = "EQUALS" // =
 
 	// Punctuation
 	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
@@ -105,6 +111,14 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 
 	return grammar.LexicalGrammar{
 		Tokens: []grammar.TokenDefinition{
+			// Keywords: must be matched before identifiers since they look like identifiers
+			// Higher priority ensures "let" is recognized as TOKEN_LET, not TOKEN_IDENTIFIER
+			{
+				Name:     TOKEN_LET,
+				Pattern:  grammar.Literal("let"),
+				Priority: 5,
+			},
+
 			// Identifiers: must start with letter or underscore, followed by letters/digits/underscores
 			// Higher priority to match before being confused with number literals
 			{
@@ -167,6 +181,13 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_INT_DECIMAL,
 				Pattern:  integerPart,
+				Priority: 1,
+			},
+
+			// Operators
+			{
+				Name:     TOKEN_EQUALS,
+				Pattern:  grammar.Literal("="),
 				Priority: 1,
 			},
 

@@ -1,0 +1,6 @@
+let x = 42
+let y = 100
+println(x)
+println(y)
+let z = x
+println(z)

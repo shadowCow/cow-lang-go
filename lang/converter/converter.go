@@ -28,21 +28,21 @@ func ParseTreeToAST(tree *parsetree.ProgramNode) (*ast.Program, error) {
 	}
 
 	// Process the root based on the Cow grammar
-	// Current grammar: Program -> Expression ProgramRest
+	// Current grammar: Program -> Statement ProgramRest
 	if rootNonTerminal.Symbol == "Program" {
-		// Program should have two children: Expression and ProgramRest
+		// Program should have two children: Statement and ProgramRest
 		if len(rootNonTerminal.Children) != 2 {
 			return nil, fmt.Errorf("Program node expected 2 children, got %d", len(rootNonTerminal.Children))
 		}
 
-		// Convert the first expression to a statement
+		// Convert the first statement
 		stmt, err := convertToStatement(rootNonTerminal.Children[0])
 		if err != nil {
 			return nil, err
 		}
 		program.Statements = append(program.Statements, stmt)
 
-		// Extract remaining expressions from ProgramRest
+		// Extract remaining statements from ProgramRest
 		restStmts, err := extractProgramRest(rootNonTerminal.Children[1])
 		if err != nil {
 			return nil, err
@@ -54,11 +54,11 @@ func ParseTreeToAST(tree *parsetree.ProgramNode) (*ast.Program, error) {
 }
 
 // extractProgramRest extracts remaining statements from a ProgramRest node.
-// ProgramRest: Expression ProgramRest | ε
+// ProgramRest: Statement ProgramRest | ε
 func extractProgramRest(node parsetree.ParseTree) ([]ast.Statement, error) {
 	switch n := node.(type) {
 	case *parsetree.EmptyNode:
-		// No more expressions (epsilon)
+		// No more statements (epsilon)
 		return []ast.Statement{}, nil
 
 	case *parsetree.NonTerminalNode:
@@ -66,13 +66,13 @@ func extractProgramRest(node parsetree.ParseTree) ([]ast.Statement, error) {
 			return nil, fmt.Errorf("expected ProgramRest, got %s", n.Symbol)
 		}
 
-		// Could be empty (0 children) or Expression ProgramRest (2 children)
+		// Could be empty (0 children) or Statement ProgramRest (2 children)
 		if len(n.Children) == 0 {
-			// Empty - no more expressions
+			// Empty - no more statements
 			return []ast.Statement{}, nil
 		} else if len(n.Children) == 2 {
-			// Expression ProgramRest
-			// Convert the expression (index 0) to a statement
+			// Statement ProgramRest
+			// Convert the statement (index 0)
 			stmt, err := convertToStatement(n.Children[0])
 			if err != nil {
 				return nil, err
@@ -95,20 +95,76 @@ func extractProgramRest(node parsetree.ParseTree) ([]ast.Statement, error) {
 }
 
 // convertToStatement converts a parse tree node to a Cow statement.
+// Grammar: Statement -> LetStatement | ExpressionStatement
 func convertToStatement(node parsetree.ParseTree) (ast.Statement, error) {
-	// For now, all statements are expression statements containing literals
-	expr, err := convertToExpression(node)
-	if err != nil {
-		return nil, err
-	}
+	switch n := node.(type) {
+	case *parsetree.NonTerminalNode:
+		switch n.Symbol {
+		case "Statement":
+			// Statement node should have one child: LetStatement or ExpressionStatement
+			if len(n.Children) != 1 {
+				return nil, fmt.Errorf("Statement node expected 1 child, got %d", len(n.Children))
+			}
+			return convertToStatement(n.Children[0])
 
-	return &ast.ExpressionStatement{
-		Token:      "", // We could extract this from the expression if needed
-		Expression: expr,
-	}, nil
+		case "LetStatement":
+			// LetStatement: LET IDENTIFIER EQUALS Expression
+			if len(n.Children) != 4 {
+				return nil, fmt.Errorf("LetStatement node expected 4 children, got %d", len(n.Children))
+			}
+
+			// Extract identifier (child 1)
+			identifierNode, ok := n.Children[1].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for identifier, got %T", n.Children[1])
+			}
+			name := identifierNode.Token.Value
+
+			// Extract value expression (child 3)
+			valueExpr, err := convertToExpression(n.Children[3])
+			if err != nil {
+				return nil, err
+			}
+
+			// Get LET token for Token field (child 0)
+			letNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for let keyword, got %T", n.Children[0])
+			}
+
+			return &ast.LetStatement{
+				Token: letNode.Token.Value,
+				Name:  name,
+				Value: valueExpr,
+			}, nil
+
+		case "ExpressionStatement":
+			// ExpressionStatement: Expression
+			if len(n.Children) != 1 {
+				return nil, fmt.Errorf("ExpressionStatement node expected 1 child, got %d", len(n.Children))
+			}
+
+			expr, err := convertToExpression(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+
+			return &ast.ExpressionStatement{
+				Token:      "", // Could extract from expression if needed
+				Expression: expr,
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("unexpected non-terminal in statement context: %s", n.Symbol)
+		}
+
+	default:
+		return nil, fmt.Errorf("expected non-terminal for statement, got %T", node)
+	}
 }
 
 // convertToExpression converts a parse tree node to a Cow expression.
+// Grammar: Expression -> IDENTIFIER ExpressionRest | Literal
 func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 	switch n := node.(type) {
 	case *parsetree.TerminalNode:
@@ -119,36 +175,26 @@ func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 		// Non-terminal node - check what symbol it is
 		switch n.Symbol {
 		case "Expression":
-			// Expression should have one child: FunctionCall or Literal
-			if len(n.Children) != 1 {
-				return nil, fmt.Errorf("Expression node expected 1 child, got %d", len(n.Children))
-			}
-			return convertToExpression(n.Children[0])
+			// Expression: IDENTIFIER ExpressionRest | Literal
+			if len(n.Children) == 2 {
+				// IDENTIFIER ExpressionRest
+				// Child 0: IDENTIFIER terminal
+				// Child 1: ExpressionRest non-terminal
+				identifierNode, ok := n.Children[0].(*parsetree.TerminalNode)
+				if !ok {
+					return nil, fmt.Errorf("expected terminal for identifier, got %T", n.Children[0])
+				}
+				identifierName := identifierNode.Token.Value
 
-		case "FunctionCall":
-			// FunctionCall: IDENTIFIER LPAREN Arguments RPAREN
-			if len(n.Children) != 4 {
-				return nil, fmt.Errorf("FunctionCall node expected 4 children, got %d", len(n.Children))
-			}
+				// Check ExpressionRest to determine if it's a function call or identifier
+				expressionRest := n.Children[1]
+				return convertIdentifierExpression(identifierName, identifierNode.Token.Value, expressionRest)
 
-			// Extract function name from IDENTIFIER token
-			identifierNode, ok := n.Children[0].(*parsetree.TerminalNode)
-			if !ok {
-				return nil, fmt.Errorf("expected terminal for function name, got %T", n.Children[0])
+			} else if len(n.Children) == 1 {
+				// Literal
+				return convertToExpression(n.Children[0])
 			}
-			functionName := identifierNode.Token.Value
-
-			// Extract arguments from Arguments node
-			arguments, err := extractArguments(n.Children[2])
-			if err != nil {
-				return nil, err
-			}
-
-			return &ast.FunctionCall{
-				Token:     identifierNode.Token.Value,
-				Name:      functionName,
-				Arguments: arguments,
-			}, nil
+			return nil, fmt.Errorf("Expression node expected 1 or 2 children, got %d", len(n.Children))
 
 		case "Literal":
 			// Literal should have one child: a terminal (INT_DECIMAL, INT_HEX, etc.)
@@ -166,6 +212,51 @@ func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 
 	default:
 		return nil, fmt.Errorf("unknown parse tree node type: %T", node)
+	}
+}
+
+// convertIdentifierExpression converts an identifier with ExpressionRest.
+// If ExpressionRest is empty, it's an Identifier.
+// If ExpressionRest has LPAREN, it's a FunctionCall.
+func convertIdentifierExpression(name, token string, expressionRest parsetree.ParseTree) (ast.Expression, error) {
+	switch rest := expressionRest.(type) {
+	case *parsetree.EmptyNode:
+		// ExpressionRest is ε, so this is just an identifier
+		return &ast.Identifier{
+			Token: token,
+			Name:  name,
+		}, nil
+
+	case *parsetree.NonTerminalNode:
+		if rest.Symbol != "ExpressionRest" {
+			return nil, fmt.Errorf("expected ExpressionRest, got %s", rest.Symbol)
+		}
+
+		// Check if it's empty (0 children) or LPAREN Arguments RPAREN (3 children)
+		if len(rest.Children) == 0 {
+			// Empty - just an identifier
+			return &ast.Identifier{
+				Token: token,
+				Name:  name,
+			}, nil
+		} else if len(rest.Children) == 3 {
+			// LPAREN Arguments RPAREN - function call
+			// Extract arguments from child 1 (Arguments)
+			arguments, err := extractArguments(rest.Children[1])
+			if err != nil {
+				return nil, err
+			}
+
+			return &ast.FunctionCall{
+				Token:     token,
+				Name:      name,
+				Arguments: arguments,
+			}, nil
+		}
+		return nil, fmt.Errorf("ExpressionRest node expected 0 or 3 children, got %d", len(rest.Children))
+
+	default:
+		return nil, fmt.Errorf("unexpected node type for ExpressionRest: %T", expressionRest)
 	}
 }
 

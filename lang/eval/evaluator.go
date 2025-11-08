@@ -9,9 +9,33 @@ import (
 	"github.com/shadowCow/cow-lang-go/lang/ast"
 )
 
+// Environment stores variable bindings.
+type Environment struct {
+	store map[string]interface{}
+}
+
+// NewEnvironment creates a new environment.
+func NewEnvironment() *Environment {
+	return &Environment{
+		store: make(map[string]interface{}),
+	}
+}
+
+// Get retrieves a variable value from the environment.
+func (env *Environment) Get(name string) (interface{}, bool) {
+	value, exists := env.store[name]
+	return value, exists
+}
+
+// Set stores a variable value in the environment.
+func (env *Environment) Set(name string, value interface{}) {
+	env.store[name] = value
+}
+
 // Evaluator holds the state during evaluation.
 type Evaluator struct {
-	output io.Writer // Where to write println output
+	output io.Writer     // Where to write println output
+	env    *Environment  // Variable storage
 }
 
 // NewEvaluator creates a new evaluator.
@@ -19,6 +43,7 @@ type Evaluator struct {
 func NewEvaluator(output io.Writer) *Evaluator {
 	return &Evaluator{
 		output: output,
+		env:    NewEnvironment(),
 	}
 }
 
@@ -35,12 +60,29 @@ func (e *Evaluator) Eval(program *ast.Program) error {
 // evalStatement evaluates a single statement.
 func (e *Evaluator) evalStatement(stmt ast.Statement) error {
 	switch s := stmt.(type) {
+	case *ast.LetStatement:
+		return e.evalLetStatement(s)
+
 	case *ast.ExpressionStatement:
 		_, err := e.evalExpression(s.Expression)
 		return err
+
 	default:
 		return fmt.Errorf("unknown statement type: %T", stmt)
 	}
+}
+
+// evalLetStatement evaluates a let statement (variable declaration).
+func (e *Evaluator) evalLetStatement(stmt *ast.LetStatement) error {
+	// Evaluate the value expression
+	value, err := e.evalExpression(stmt.Value)
+	if err != nil {
+		return fmt.Errorf("error evaluating let statement for '%s': %v", stmt.Name, err)
+	}
+
+	// Store the variable in the environment
+	e.env.Set(stmt.Name, value)
+	return nil
 }
 
 // evalExpression evaluates an expression and returns its value.
@@ -53,12 +95,24 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.FloatLiteral:
 		return ex.Value, nil
 
+	case *ast.Identifier:
+		return e.evalIdentifier(ex)
+
 	case *ast.FunctionCall:
 		return e.evalFunctionCall(ex)
 
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
+}
+
+// evalIdentifier evaluates an identifier (variable reference).
+func (e *Evaluator) evalIdentifier(id *ast.Identifier) (interface{}, error) {
+	value, exists := e.env.Get(id.Name)
+	if !exists {
+		return nil, fmt.Errorf("undefined variable: %s", id.Name)
+	}
+	return value, nil
 }
 
 // evalFunctionCall evaluates a function call.

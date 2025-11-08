@@ -45,6 +45,17 @@ type ExpressionStatement struct {
 func (es *ExpressionStatement) statementNode()       {}
 func (es *ExpressionStatement) TokenLiteral() string { return es.Token }
 
+// LetStatement represents a variable declaration with initialization.
+// Syntax: let <name> = <value>
+type LetStatement struct {
+	Token string     // The 'let' token
+	Name  string     // The variable name
+	Value Expression // The initialization expression
+}
+
+func (ls *LetStatement) statementNode()       {}
+func (ls *LetStatement) TokenLiteral() string { return ls.Token }
+
 // IntLiteral represents an integer literal.
 type IntLiteral struct {
 	Token string // The token text (e.g., "42", "0xFF")
@@ -72,3 +83,12 @@ type FunctionCall struct {
 
 func (fc *FunctionCall) expressionNode()      {}
 func (fc *FunctionCall) TokenLiteral() string { return fc.Token }
+
+// Identifier represents a variable reference in an expression.
+type Identifier struct {
+	Token string // The identifier token
+	Name  string // The variable name
+}
+
+func (i *Identifier) expressionNode()      {}
+func (i *Identifier) TokenLiteral() string { return i.Token }
