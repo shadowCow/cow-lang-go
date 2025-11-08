@@ -9,16 +9,38 @@ import (
 )
 
 func main() {
-	// Check for exactly one command line argument
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <file.cow>\n", os.Args[0])
+	// Parse command line arguments
+	debug := false
+	var filePath string
+
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s [--debug] <file.cow>\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	filePath := os.Args[1]
+	// Check for --debug flag
+	argIdx := 1
+	if os.Args[argIdx] == "--debug" {
+		debug = true
+		argIdx++
+	}
+
+	if argIdx >= len(os.Args) {
+		fmt.Fprintf(os.Stderr, "Usage: %s [--debug] <file.cow>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	filePath = os.Args[argIdx]
 
 	// Run the Cow program
-	if err := runner.Run(filePath, os.Stdout); err != nil {
+	var err error
+	if debug {
+		err = runner.RunWithDebug(filePath, os.Stdout)
+	} else {
+		err = runner.Run(filePath, os.Stdout)
+	}
+
+	if err != nil {
 		log.Fatal(err)
 	}
 }
