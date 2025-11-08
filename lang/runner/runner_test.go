@@ -23,7 +23,7 @@ func TestRun(t *testing.T) {
 
 	// Run the program
 	var output bytes.Buffer
-	err = Run(testFile, &output)
+	err = Run(testFile, &output, false)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestRunWithExampleFile(t *testing.T) {
 
 	// Run the program
 	var output bytes.Buffer
-	err := Run(exampleFile, &output)
+	err := Run(exampleFile, &output, false)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestRunWithExampleFile(t *testing.T) {
 // TestRunFileNotFound tests error handling when file doesn't exist.
 func TestRunFileNotFound(t *testing.T) {
 	var output bytes.Buffer
-	err := Run("/nonexistent/file.cow", &output)
+	err := Run("/nonexistent/file.cow", &output, false)
 
 	if err == nil {
 		t.Fatal("Expected error for nonexistent file, got nil")
@@ -86,7 +86,7 @@ func TestRunLexerError(t *testing.T) {
 
 	// Run the program
 	var output bytes.Buffer
-	err = Run(testFile, &output)
+	err = Run(testFile, &output, false)
 
 	if err == nil {
 		t.Fatal("Expected lexer error, got nil")
@@ -109,7 +109,7 @@ func TestRunParserError(t *testing.T) {
 
 	// Run the program
 	var output bytes.Buffer
-	err = Run(testFile, &output)
+	err = Run(testFile, &output, false)
 
 	if err == nil {
 		t.Fatal("Expected parser error, got nil")

@@ -33,14 +33,7 @@ func main() {
 	filePath = os.Args[argIdx]
 
 	// Run the Cow program
-	var err error
-	if debug {
-		err = runner.RunWithDebug(filePath, os.Stdout)
-	} else {
-		err = runner.Run(filePath, os.Stdout)
-	}
-
-	if err != nil {
+	if err := runner.Run(filePath, os.Stdout, debug); err != nil {
 		log.Fatal(err)
 	}
 }
