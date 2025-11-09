@@ -9,27 +9,46 @@ import (
 	"github.com/shadowCow/cow-lang-go/lang/ast"
 )
 
-// Environment stores variable bindings.
+// Environment stores variable bindings with support for scope chaining.
 type Environment struct {
-	store map[string]interface{}
+	store  map[string]interface{}
+	parent *Environment // Parent environment for scope chain (nil for global scope)
 }
 
-// NewEnvironment creates a new environment.
-func NewEnvironment() *Environment {
+// NewEnvironment creates a new environment with an optional parent.
+// Pass nil for parent to create a global scope environment.
+func NewEnvironment(parent *Environment) *Environment {
 	return &Environment{
-		store: make(map[string]interface{}),
+		store:  make(map[string]interface{}),
+		parent: parent,
 	}
 }
 
 // Get retrieves a variable value from the environment.
+// Searches up the scope chain if not found in current environment.
 func (env *Environment) Get(name string) (interface{}, bool) {
-	value, exists := env.store[name]
-	return value, exists
+	// Check local scope first
+	if value, exists := env.store[name]; exists {
+		return value, true
+	}
+	// Check parent scope if it exists
+	if env.parent != nil {
+		return env.parent.Get(name)
+	}
+	return nil, false
 }
 
 // Set stores a variable value in the environment.
 func (env *Environment) Set(name string, value interface{}) {
 	env.store[name] = value
+}
+
+// Function represents a user-defined function at runtime.
+// Functions are first-class values that can be stored in variables.
+type Function struct {
+	Parameters []string  // Parameter names
+	Body       *ast.Block // Function body
+	// Note: No Env field - we don't capture closures, only access globals
 }
 
 // Evaluator holds the state during evaluation.
@@ -43,7 +62,7 @@ type Evaluator struct {
 func NewEvaluator(output io.Writer) *Evaluator {
 	return &Evaluator{
 		output: output,
-		env:    NewEnvironment(),
+		env:    NewEnvironment(nil), // nil parent = global scope
 	}
 }
 
@@ -65,6 +84,18 @@ func (e *Evaluator) evalStatement(stmt ast.Statement) error {
 
 	case *ast.ExpressionStatement:
 		_, err := e.evalExpression(s.Expression)
+		return err
+
+	case *ast.FunctionDef:
+		return e.evalFunctionDef(s)
+
+	case *ast.ReturnStatement:
+		// Return statements should only be evaluated inside blocks
+		// This case shouldn't be hit at the top level
+		return fmt.Errorf("return statement outside function")
+
+	case *ast.Block:
+		_, err := e.evalBlock(s)
 		return err
 
 	default:
@@ -113,6 +144,9 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.BinaryExpression:
 		return e.evalBinaryExpression(ex)
 
+	case *ast.FunctionLiteral:
+		return e.evalFunctionLiteral(ex)
+
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -129,26 +163,38 @@ func (e *Evaluator) evalIdentifier(id *ast.Identifier) (interface{}, error) {
 
 // evalFunctionCall evaluates a function call.
 func (e *Evaluator) evalFunctionCall(call *ast.FunctionCall) (interface{}, error) {
-	// For now, we only support the built-in println function
-	if call.Name != "println" {
-		return nil, fmt.Errorf("unknown function: %s", call.Name)
+	// Check for built-in println function
+	if call.Name == "println" {
+		// Evaluate all arguments
+		for i, arg := range call.Arguments {
+			value, err := e.evalExpression(arg)
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating argument %d to println: %v", i, err)
+			}
+
+			// Print the value
+			if err := e.println(value); err != nil {
+				return nil, err
+			}
+		}
+		// println returns void/nil
+		return nil, nil
 	}
 
-	// Evaluate all arguments
-	for i, arg := range call.Arguments {
-		value, err := e.evalExpression(arg)
-		if err != nil {
-			return nil, fmt.Errorf("error evaluating argument %d to println: %v", i, err)
-		}
-
-		// Print the value
-		if err := e.println(value); err != nil {
-			return nil, err
-		}
+	// Look up user-defined function
+	fnValue, exists := e.env.Get(call.Name)
+	if !exists {
+		return nil, fmt.Errorf("undefined function: %s", call.Name)
 	}
 
-	// println returns void/nil
-	return nil, nil
+	// Check if it's a Function
+	fn, ok := fnValue.(*Function)
+	if !ok {
+		return nil, fmt.Errorf("%s is not a function (it's a %T)", call.Name, fnValue)
+	}
+
+	// Call the user-defined function
+	return e.callUserFunction(fn, call.Arguments)
 }
 
 // println prints a value to the output writer.
@@ -439,4 +485,104 @@ func (e *Evaluator) evalStringBinaryOp(left, right string, operator string) (int
 // Works on any type.
 func (e *Evaluator) evalEquality(left, right interface{}) bool {
 	return left == right
+}
+
+// evalFunctionDef evaluates a function definition statement.
+// Creates a Function value and stores it in the environment.
+func (e *Evaluator) evalFunctionDef(stmt *ast.FunctionDef) error {
+	// Create function value
+	fn := &Function{
+		Parameters: stmt.Parameters,
+		Body:       stmt.Body,
+	}
+
+	// Store in environment (global scope)
+	e.env.Set(stmt.Name, fn)
+	return nil
+}
+
+// evalFunctionLiteral evaluates a function literal expression.
+// Returns a Function value that can be assigned to variables or passed as arguments.
+func (e *Evaluator) evalFunctionLiteral(expr *ast.FunctionLiteral) (interface{}, error) {
+	return &Function{
+		Parameters: expr.Parameters,
+		Body:       expr.Body,
+	}, nil
+}
+
+// returnValue is a special type used to propagate return statements up through block evaluation.
+type returnValue struct {
+	value interface{}
+}
+
+// evalBlock evaluates a block of statements.
+// Returns the value from a return statement, or nil if no return.
+func (e *Evaluator) evalBlock(block *ast.Block) (interface{}, error) {
+	for _, stmt := range block.Statements {
+		// Check if it's a return statement
+		if retStmt, ok := stmt.(*ast.ReturnStatement); ok {
+			// Evaluate return expression
+			val, err := e.evalExpression(retStmt.Value)
+			if err != nil {
+				return nil, err
+			}
+			// Return the value wrapped to signal a return
+			return &returnValue{value: val}, nil
+		}
+
+		// Evaluate other statements
+		if err := e.evalStatement(stmt); err != nil {
+			return nil, err
+		}
+	}
+
+	// No return statement found
+	return nil, fmt.Errorf("function must end with return statement")
+}
+
+// callUserFunction calls a user-defined function with the given arguments.
+func (e *Evaluator) callUserFunction(fn *Function, args []ast.Expression) (interface{}, error) {
+	// Check argument count
+	if len(args) != len(fn.Parameters) {
+		return nil, fmt.Errorf("function expects %d arguments, got %d",
+			len(fn.Parameters), len(args))
+	}
+
+	// Evaluate arguments
+	argValues := make([]interface{}, len(args))
+	for i, arg := range args {
+		val, err := e.evalExpression(arg)
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating argument %d: %v", i, err)
+		}
+		argValues[i] = val
+	}
+
+	// Create new environment for function scope
+	// Parent is current environment (typically global)
+	fnEnv := NewEnvironment(e.env)
+
+	// Bind parameters to argument values
+	for i, param := range fn.Parameters {
+		fnEnv.Set(param, argValues[i])
+	}
+
+	// Save current environment and switch to function environment
+	savedEnv := e.env
+	e.env = fnEnv
+	defer func() { e.env = savedEnv }()
+
+	// Execute function body
+	result, err := e.evalBlock(fn.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unwrap return value
+	if retVal, ok := result.(*returnValue); ok {
+		return retVal.value, nil
+	}
+
+	// This shouldn't happen if evalBlock works correctly
+	return nil, fmt.Errorf("function did not return properly")
 }

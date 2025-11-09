@@ -47,6 +47,11 @@ func TestCLIWithExamples(t *testing.T) {
 			args:     []string{"cow-lang", "../../examples/strings.cow"},
 			expected: "hello\nworld\nhello world\nline1\nline2\ntab\there\nquote: \"\nbackslash: \\\nraw string with \\n no escape\nmulti\nline\nraw string\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\napplepie\ntrue\n",
 		},
+		{
+			name:     "functions",
+			args:     []string{"cow-lang", "../../examples/functions.cow"},
+			expected: "8\n28\n36\n15\n12\n42\nHelloWorld\ntrue\nfalse\n",
+		},
 	}
 
 	for _, tt := range tests {

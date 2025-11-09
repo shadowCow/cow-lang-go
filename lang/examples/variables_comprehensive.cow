@@ -1,6 +1,6 @@
 let x = 42
 let y = 100
-println(x)
-println(y)
+let _ = println(x)
+let _2 = println(y)
 let z = x
-println(z)
+let _3 = println(z)

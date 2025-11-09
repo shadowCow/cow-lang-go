@@ -7,14 +7,22 @@ import "github.com/shadowCow/cow-lang-go/tooling/grammar"
 
 const (
 	// Top-level program structure
-	SYM_PROGRAM       grammar.Symbol = "Program"
-	SYM_PROGRAM_REST  grammar.Symbol = "ProgramRest"
-	SYM_PROGRAM_REST2 grammar.Symbol = "ProgramRest2"
+	SYM_PROGRAM              grammar.Symbol = "Program"
+	SYM_PROGRAM_REST         grammar.Symbol = "ProgramRest"
+	SYM_PROGRAM_REST2        grammar.Symbol = "ProgramRest2"
+	SYM_TOP_LEVEL_ITEM       grammar.Symbol = "TopLevelItem"
+	SYM_TOP_LEVEL_ITEM_REST  grammar.Symbol = "TopLevelItemRest"
+	SYM_TOP_LEVEL_ITEM_REST2 grammar.Symbol = "TopLevelItemRest2"
 
 	// Statements
 	SYM_STATEMENT            grammar.Symbol = "Statement"
 	SYM_LET_STATEMENT        grammar.Symbol = "LetStatement"
 	SYM_EXPRESSION_STATEMENT grammar.Symbol = "ExpressionStatement"
+	SYM_FUNCTION_DEF         grammar.Symbol = "FunctionDef"
+	SYM_RETURN_STATEMENT     grammar.Symbol = "ReturnStatement"
+	SYM_BLOCK                grammar.Symbol = "Block"
+	SYM_BLOCK_STATEMENTS     grammar.Symbol = "BlockStatements"
+	SYM_BLOCK_STMT_REST      grammar.Symbol = "BlockStmtRest"
 
 	// Expressions (with operator precedence)
 	SYM_EXPRESSION grammar.Symbol = "Expression"
@@ -55,11 +63,14 @@ const (
 	SYM_PRIMARY      grammar.Symbol = "Primary"
 	SYM_PRIMARY_REST grammar.Symbol = "PrimaryRest"
 
-	// Function calls
-	SYM_FUNCTION_CALL grammar.Symbol = "FunctionCall"
-	SYM_ARGUMENTS     grammar.Symbol = "Arguments"
-	SYM_ARG_LIST      grammar.Symbol = "ArgumentList"
-	SYM_ARG_REST      grammar.Symbol = "ArgumentRest"
+	// Function calls and parameters
+	SYM_FUNCTION_CALL   grammar.Symbol = "FunctionCall"
+	SYM_ARGUMENTS       grammar.Symbol = "Arguments"
+	SYM_ARG_LIST        grammar.Symbol = "ArgumentList"
+	SYM_ARG_REST        grammar.Symbol = "ArgumentRest"
+	SYM_PARAMETER_LIST  grammar.Symbol = "ParameterList"
+	SYM_PARAMETER_REST  grammar.Symbol = "ParameterRest"
+	SYM_FUNCTION_LITERAL grammar.Symbol = "FunctionLiteral"
 
 	// Literal values
 	SYM_LITERAL grammar.Symbol = "Literal"
@@ -115,37 +126,45 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 	return grammar.SyntacticGrammar{
 		StartSymbol: SYM_PROGRAM,
 		Productions: map[grammar.Symbol]grammar.ProductionRule{
-			// Program is a sequence of statements
+			// Program is a sequence of top-level items (functions or statements)
 			SYM_PROGRAM: grammar.SynSequence{
-				grammar.NonTerminal{Symbol: SYM_STATEMENT},
-				grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
+				grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_ITEM},
+				grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_ITEM_REST},
 			},
 
-			// ProgramRest: NEWLINE ProgramRest2 | ε
-			// Handles newline-separated statements, allowing trailing newlines
-			SYM_PROGRAM_REST: grammar.SynAlternative{
+			// TopLevelItemRest: NEWLINE TopLevelItemRest2 | ε
+			SYM_TOP_LEVEL_ITEM_REST: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_NEWLINE},
-					grammar.NonTerminal{Symbol: SYM_PROGRAM_REST2},
+					grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_ITEM_REST2},
 				},
-				// Empty - no more statements (epsilon)
+				// Empty - no more items (epsilon)
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
-			// ProgramRest2: Statement ProgramRest | ε
-			// Continues the statement sequence or allows trailing newline
-			SYM_PROGRAM_REST2: grammar.SynAlternative{
+			// TopLevelItemRest2: TopLevelItem TopLevelItemRest | ε
+			SYM_TOP_LEVEL_ITEM_REST2: grammar.SynAlternative{
 				grammar.SynSequence{
-					grammar.NonTerminal{Symbol: SYM_STATEMENT},
-					grammar.NonTerminal{Symbol: SYM_PROGRAM_REST},
+					grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_ITEM},
+					grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_ITEM_REST},
 				},
 				// Empty - allows trailing newline (epsilon)
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
-			// Statement can be a let statement or an expression statement
+			// TopLevelItem can be a function definition or specific statement types
+			// Functions can only be defined at top level (not inside blocks)
+			// ExpressionStatement not allowed at top level to avoid LL(1) conflict with FunctionLiteral
+			SYM_TOP_LEVEL_ITEM: grammar.SynAlternative{
+				grammar.NonTerminal{Symbol: SYM_FUNCTION_DEF},
+				grammar.NonTerminal{Symbol: SYM_LET_STATEMENT},
+			},
+
+			// Statement can be a let statement, return statement, or expression statement
+			// Note: FunctionDef removed from here to avoid LL(1) conflict with FunctionLiteral
 			SYM_STATEMENT: grammar.SynAlternative{
 				grammar.NonTerminal{Symbol: SYM_LET_STATEMENT},
+				grammar.NonTerminal{Symbol: SYM_RETURN_STATEMENT},
 				grammar.NonTerminal{Symbol: SYM_EXPRESSION_STATEMENT},
 			},
 
@@ -160,6 +179,71 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 			// ExpressionStatement: Expression
 			SYM_EXPRESSION_STATEMENT: grammar.NonTerminal{
 				Symbol: SYM_EXPRESSION,
+			},
+
+			// FunctionDef: FN IDENTIFIER LPAREN ParameterList RPAREN Block
+			SYM_FUNCTION_DEF: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_FN},
+				grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+				grammar.Terminal{TokenType: TOKEN_LPAREN},
+				grammar.NonTerminal{Symbol: SYM_PARAMETER_LIST},
+				grammar.Terminal{TokenType: TOKEN_RPAREN},
+				grammar.NonTerminal{Symbol: SYM_BLOCK},
+			},
+
+			// ParameterList: ε | IDENTIFIER ParameterRest
+			SYM_PARAMETER_LIST: grammar.SynAlternative{
+				grammar.SynSequence{}, // epsilon - no parameters
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+					grammar.NonTerminal{Symbol: SYM_PARAMETER_REST},
+				},
+			},
+
+			// ParameterRest: COMMA IDENTIFIER ParameterRest | ε
+			SYM_PARAMETER_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_COMMA},
+					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+					grammar.NonTerminal{Symbol: SYM_PARAMETER_REST},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// ReturnStatement: RETURN Expression
+			SYM_RETURN_STATEMENT: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_RETURN},
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+			},
+
+			// Block: LBRACE BlockStatements RBRACE
+			SYM_BLOCK: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_LBRACE},
+				grammar.NonTerminal{Symbol: SYM_BLOCK_STATEMENTS},
+				grammar.Terminal{TokenType: TOKEN_RBRACE},
+			},
+
+			// BlockStatements: NEWLINE BlockStatements | Statement BlockStmtRest | ε
+			// Allows leading newlines before statements in blocks
+			SYM_BLOCK_STATEMENTS: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_NEWLINE},
+					grammar.NonTerminal{Symbol: SYM_BLOCK_STATEMENTS},
+				},
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_STATEMENT},
+					grammar.NonTerminal{Symbol: SYM_BLOCK_STMT_REST},
+				},
+				grammar.SynSequence{}, // epsilon - empty block
+			},
+
+			// BlockStmtRest: NEWLINE BlockStatements | ε
+			SYM_BLOCK_STMT_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_NEWLINE},
+					grammar.NonTerminal{Symbol: SYM_BLOCK_STATEMENTS},
+				},
+				grammar.SynSequence{}, // epsilon - allows last statement without trailing newline
 			},
 
 			// Expression: LogicalOr
@@ -303,7 +387,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_MINUS},
 			},
 
-			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN | FunctionLiteral
 			SYM_PRIMARY: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
@@ -315,6 +399,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
 					grammar.Terminal{TokenType: TOKEN_RPAREN},
 				},
+				grammar.NonTerminal{Symbol: SYM_FUNCTION_LITERAL},
 			},
 
 			// PrimaryRest: LPAREN Arguments RPAREN | ε
@@ -351,6 +436,15 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				},
 				// Empty - no more arguments (epsilon)
 				grammar.SynSequence{}, // empty sequence = epsilon
+			},
+
+			// FunctionLiteral: FN LPAREN ParameterList RPAREN Block
+			SYM_FUNCTION_LITERAL: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_FN},
+				grammar.Terminal{TokenType: TOKEN_LPAREN},
+				grammar.NonTerminal{Symbol: SYM_PARAMETER_LIST},
+				grammar.Terminal{TokenType: TOKEN_RPAREN},
+				grammar.NonTerminal{Symbol: SYM_BLOCK},
 			},
 
 			// A literal can be a number, boolean, or string

@@ -1,36 +1,36 @@
 let a = "hello"
-println(a)
+let _ = println(a)
 let b = "world"
-println(b)
+let _2 = println(b)
 let c = a + " " + b
-println(c)
+let _3 = println(c)
 let d = "line1\nline2"
-println(d)
+let _4 = println(d)
 let e = "tab\there"
-println(e)
+let _5 = println(e)
 let f = "quote: \""
-println(f)
+let _6 = println(f)
 let g = "backslash: \\"
-println(g)
+let _7 = println(g)
 let h = `raw string with \n no escape`
-println(h)
+let _8 = println(h)
 let i = `multi
 line
 raw string`
-println(i)
+let _9 = println(i)
 let j = "abc" == "abc"
-println(j)
+let _10 = println(j)
 let k = "abc" != "xyz"
-println(k)
+let _11 = println(k)
 let l = "abc" < "xyz"
-println(l)
+let _12 = println(l)
 let m = "xyz" > "abc"
-println(m)
+let _13 = println(m)
 let n = "abc" <= "abc"
-println(n)
+let _14 = println(n)
 let o = "xyz" >= "xyz"
-println(o)
+let _15 = println(o)
 let p = "apple" + "pie"
-println(p)
+let _16 = println(p)
 let q = "a" < "b"
-println(q)
+let _17 = println(q)

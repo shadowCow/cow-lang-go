@@ -28,22 +28,22 @@ func ParseTreeToAST(tree *parsetree.ProgramNode) (*ast.Program, error) {
 	}
 
 	// Process the root based on the Cow grammar
-	// Current grammar: Program -> Statement ProgramRest
+	// Current grammar: Program -> TopLevelItem TopLevelItemRest
 	if rootNonTerminal.Symbol == "Program" {
-		// Program should have two children: Statement and ProgramRest
+		// Program should have two children: TopLevelItem and TopLevelItemRest
 		if len(rootNonTerminal.Children) != 2 {
 			return nil, fmt.Errorf("Program node expected 2 children, got %d", len(rootNonTerminal.Children))
 		}
 
-		// Convert the first statement
-		stmt, err := convertToStatement(rootNonTerminal.Children[0])
+		// Convert the first top-level item
+		stmt, err := convertTopLevelItem(rootNonTerminal.Children[0])
 		if err != nil {
 			return nil, err
 		}
 		program.Statements = append(program.Statements, stmt)
 
-		// Extract remaining statements from ProgramRest
-		restStmts, err := extractProgramRest(rootNonTerminal.Children[1])
+		// Extract remaining items from TopLevelItemRest
+		restStmts, err := extractTopLevelItemRest(rootNonTerminal.Children[1])
 		if err != nil {
 			return nil, err
 		}
@@ -51,6 +51,84 @@ func ParseTreeToAST(tree *parsetree.ProgramNode) (*ast.Program, error) {
 	}
 
 	return program, nil
+}
+
+// convertTopLevelItem converts a TopLevelItem to a statement.
+// TopLevelItem: FunctionDef | Statement
+func convertTopLevelItem(node parsetree.ParseTree) (ast.Statement, error) {
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for top-level item, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "TopLevelItem" {
+		return nil, fmt.Errorf("expected TopLevelItem, got %s", nonTerminal.Symbol)
+	}
+
+	// TopLevelItem should have one child: FunctionDef or Statement
+	if len(nonTerminal.Children) != 1 {
+		return nil, fmt.Errorf("TopLevelItem expected 1 child, got %d", len(nonTerminal.Children))
+	}
+
+	return convertToStatement(nonTerminal.Children[0])
+}
+
+// extractTopLevelItemRest extracts remaining top-level items.
+// TopLevelItemRest: NEWLINE TopLevelItemRest2 | ε
+func extractTopLevelItemRest(node parsetree.ParseTree) ([]ast.Statement, error) {
+	switch n := node.(type) {
+	case *parsetree.EmptyNode:
+		return []ast.Statement{}, nil
+
+	case *parsetree.NonTerminalNode:
+		if n.Symbol != "TopLevelItemRest" {
+			return nil, fmt.Errorf("expected TopLevelItemRest, got %s", n.Symbol)
+		}
+
+		if len(n.Children) == 0 {
+			return []ast.Statement{}, nil
+		} else if len(n.Children) == 2 {
+			// NEWLINE TopLevelItemRest2
+			return extractTopLevelItemRest2(n.Children[1])
+		}
+		return nil, fmt.Errorf("TopLevelItemRest expected 0 or 2 children, got %d", len(n.Children))
+
+	default:
+		return nil, fmt.Errorf("unexpected node type for TopLevelItemRest: %T", node)
+	}
+}
+
+// extractTopLevelItemRest2 extracts items from TopLevelItemRest2.
+// TopLevelItemRest2: TopLevelItem TopLevelItemRest | ε
+func extractTopLevelItemRest2(node parsetree.ParseTree) ([]ast.Statement, error) {
+	switch n := node.(type) {
+	case *parsetree.EmptyNode:
+		return []ast.Statement{}, nil
+
+	case *parsetree.NonTerminalNode:
+		if n.Symbol != "TopLevelItemRest2" {
+			return nil, fmt.Errorf("expected TopLevelItemRest2, got %s", n.Symbol)
+		}
+
+		if len(n.Children) == 0 {
+			return []ast.Statement{}, nil
+		} else if len(n.Children) == 2 {
+			// TopLevelItem TopLevelItemRest
+			stmt, err := convertTopLevelItem(n.Children[0])
+			if err != nil {
+				return nil, err
+			}
+			restStmts, err := extractTopLevelItemRest(n.Children[1])
+			if err != nil {
+				return nil, err
+			}
+			return append([]ast.Statement{stmt}, restStmts...), nil
+		}
+		return nil, fmt.Errorf("TopLevelItemRest2 expected 0 or 2 children, got %d", len(n.Children))
+
+	default:
+		return nil, fmt.Errorf("unexpected node type for TopLevelItemRest2: %T", node)
+	}
 }
 
 // extractProgramRest extracts remaining statements from a ProgramRest node.
@@ -183,6 +261,74 @@ func convertToStatement(node parsetree.ParseTree) (ast.Statement, error) {
 				Token:      "", // Could extract from expression if needed
 				Expression: expr,
 			}, nil
+
+		case "FunctionDef":
+			// FunctionDef: FN IDENTIFIER LPAREN ParameterList RPAREN Block
+			if len(n.Children) != 6 {
+				return nil, fmt.Errorf("FunctionDef node expected 6 children, got %d", len(n.Children))
+			}
+
+			// Extract fn token (child 0)
+			fnNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for fn keyword, got %T", n.Children[0])
+			}
+
+			// Extract function name (child 1)
+			nameNode, ok := n.Children[1].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for function name, got %T", n.Children[1])
+			}
+
+			// Extract parameter list (child 3)
+			params, err := extractParameterList(n.Children[3])
+			if err != nil {
+				return nil, err
+			}
+
+			// Extract block (child 5)
+			block, err := convertBlock(n.Children[5])
+			if err != nil {
+				return nil, err
+			}
+
+			return &ast.FunctionDef{
+				Token:      fnNode.Token.Value,
+				Name:       nameNode.Token.Value,
+				Parameters: params,
+				Body:       block,
+			}, nil
+
+		case "ReturnStatement":
+			// ReturnStatement: RETURN Expression
+			if len(n.Children) != 2 {
+				return nil, fmt.Errorf("ReturnStatement node expected 2 children, got %d", len(n.Children))
+			}
+
+			// Extract return token (child 0)
+			returnNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for return keyword, got %T", n.Children[0])
+			}
+
+			// Extract value expression (child 1)
+			valueExpr, err := convertToExpression(n.Children[1])
+			if err != nil {
+				return nil, err
+			}
+
+			return &ast.ReturnStatement{
+				Token: returnNode.Token.Value,
+				Value: valueExpr,
+			}, nil
+
+		case "Block":
+			// Block: LBRACE BlockStatements RBRACE
+			block, err := convertBlock(n)
+			if err != nil {
+				return nil, err
+			}
+			return block, nil
 
 		default:
 			return nil, fmt.Errorf("unexpected non-terminal in statement context: %s", n.Symbol)
@@ -337,11 +483,20 @@ func convertPrimary(node *parsetree.NonTerminalNode) (ast.Expression, error) {
 		return nil, fmt.Errorf("unexpected terminal in Primary: %s", firstChild.Token.Type)
 
 	case *parsetree.NonTerminalNode:
-		// Literal
-		if len(node.Children) != 1 {
-			return nil, fmt.Errorf("Primary Literal variant expected 1 child, got %d", len(node.Children))
+		// Could be Literal or FunctionLiteral
+		if firstChild.Symbol == "Literal" {
+			if len(node.Children) != 1 {
+				return nil, fmt.Errorf("Primary Literal variant expected 1 child, got %d", len(node.Children))
+			}
+			return convertToExpression(firstChild)
+		} else if firstChild.Symbol == "FunctionLiteral" {
+			// FunctionLiteral
+			if len(node.Children) != 1 {
+				return nil, fmt.Errorf("Primary FunctionLiteral variant expected 1 child, got %d", len(node.Children))
+			}
+			return convertFunctionLiteral(firstChild)
 		}
-		return convertToExpression(firstChild)
+		return nil, fmt.Errorf("unexpected non-terminal in Primary: %s", firstChild.Symbol)
 
 	default:
 		return nil, fmt.Errorf("unexpected first child type in Primary: %T", firstChild)
@@ -916,4 +1071,253 @@ func parseRawStringLiteral(value string) (string, error) {
 		return "", fmt.Errorf("invalid raw string literal: %s", value)
 	}
 	return value[1 : len(value)-1], nil
+}
+
+// extractParameterList extracts parameter names from a ParameterList parse tree node.
+// ParameterList: ε | IDENTIFIER ParameterRest
+func extractParameterList(node parsetree.ParseTree) ([]string, error) {
+	// Handle epsilon production
+	if _, ok := node.(*parsetree.EmptyNode); ok {
+		return []string{}, nil
+	}
+
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for parameter list, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "ParameterList" {
+		return nil, fmt.Errorf("expected ParameterList node, got %s", nonTerminal.Symbol)
+	}
+
+	// Check if empty (epsilon)
+	if len(nonTerminal.Children) == 0 {
+		return []string{}, nil
+	}
+
+	// ParameterList: IDENTIFIER ParameterRest
+	if len(nonTerminal.Children) != 2 {
+		return nil, fmt.Errorf("ParameterList node expected 0 or 2 children, got %d", len(nonTerminal.Children))
+	}
+
+	// Extract first parameter (child 0)
+	firstParam, ok := nonTerminal.Children[0].(*parsetree.TerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected terminal for first parameter, got %T", nonTerminal.Children[0])
+	}
+
+	params := []string{firstParam.Token.Value}
+
+	// Extract remaining parameters from ParameterRest
+	restParams, err := extractParameterRest(nonTerminal.Children[1])
+	if err != nil {
+		return nil, err
+	}
+
+	return append(params, restParams...), nil
+}
+
+// extractParameterRest extracts remaining parameters from ParameterRest node.
+// ParameterRest: COMMA IDENTIFIER ParameterRest | ε
+func extractParameterRest(node parsetree.ParseTree) ([]string, error) {
+	// Handle epsilon production
+	if _, ok := node.(*parsetree.EmptyNode); ok {
+		return []string{}, nil
+	}
+
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for parameter rest, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "ParameterRest" {
+		return nil, fmt.Errorf("expected ParameterRest node, got %s", nonTerminal.Symbol)
+	}
+
+	// Check if empty (epsilon)
+	if len(nonTerminal.Children) == 0 {
+		return []string{}, nil
+	}
+
+	// ParameterRest: COMMA IDENTIFIER ParameterRest
+	if len(nonTerminal.Children) != 3 {
+		return nil, fmt.Errorf("ParameterRest node expected 0 or 3 children, got %d", len(nonTerminal.Children))
+	}
+
+	// Extract parameter (child 1)
+	param, ok := nonTerminal.Children[1].(*parsetree.TerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected terminal for parameter, got %T", nonTerminal.Children[1])
+	}
+
+	params := []string{param.Token.Value}
+
+	// Recursively extract remaining parameters
+	restParams, err := extractParameterRest(nonTerminal.Children[2])
+	if err != nil {
+		return nil, err
+	}
+
+	return append(params, restParams...), nil
+}
+
+// convertBlock converts a Block parse tree node to an AST Block.
+// Block: LBRACE BlockStatements RBRACE
+func convertBlock(node parsetree.ParseTree) (*ast.Block, error) {
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for block, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "Block" {
+		return nil, fmt.Errorf("expected Block node, got %s", nonTerminal.Symbol)
+	}
+
+	// Block: LBRACE BlockStatements RBRACE
+	if len(nonTerminal.Children) != 3 {
+		return nil, fmt.Errorf("Block node expected 3 children, got %d", len(nonTerminal.Children))
+	}
+
+	// Extract LBRACE token (child 0)
+	lbrace, ok := nonTerminal.Children[0].(*parsetree.TerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected terminal for {, got %T", nonTerminal.Children[0])
+	}
+
+	// Extract statements from BlockStatements (child 1)
+	statements, err := extractBlockStatements(nonTerminal.Children[1])
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.Block{
+		Token:      lbrace.Token.Value,
+		Statements: statements,
+	}, nil
+}
+
+// extractBlockStatements extracts statements from BlockStatements node.
+// BlockStatements: NEWLINE BlockStatements | Statement BlockStmtRest | ε
+func extractBlockStatements(node parsetree.ParseTree) ([]ast.Statement, error) {
+	// Handle epsilon production
+	if _, ok := node.(*parsetree.EmptyNode); ok {
+		return []ast.Statement{}, nil
+	}
+
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for block statements, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "BlockStatements" {
+		return nil, fmt.Errorf("expected BlockStatements node, got %s", nonTerminal.Symbol)
+	}
+
+	// Check if empty (epsilon)
+	if len(nonTerminal.Children) == 0 {
+		return []ast.Statement{}, nil
+	}
+
+	// Could be: NEWLINE BlockStatements (1 or 2 children) or Statement BlockStmtRest (2 children)
+	if len(nonTerminal.Children) == 1 {
+		// Must be NEWLINE BlockStatements where BlockStatements is epsilon
+		// Just skip the newline
+		return []ast.Statement{}, nil
+	}
+
+	if len(nonTerminal.Children) != 2 {
+		return nil, fmt.Errorf("BlockStatements node expected 0, 1, or 2 children, got %d", len(nonTerminal.Children))
+	}
+
+	// Check first child to determine which alternative
+	if firstChild, ok := nonTerminal.Children[0].(*parsetree.TerminalNode); ok {
+		// NEWLINE BlockStatements
+		if firstChild.Token.Type == "NEWLINE" {
+			// Skip newline and recursively extract from BlockStatements
+			return extractBlockStatements(nonTerminal.Children[1])
+		}
+	}
+
+	// Statement BlockStmtRest
+	// Convert first statement
+	stmt, err := convertToStatement(nonTerminal.Children[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract remaining statements from BlockStmtRest
+	restStmts, err := extractBlockStmtRest(nonTerminal.Children[1])
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]ast.Statement{stmt}, restStmts...), nil
+}
+
+// extractBlockStmtRest extracts remaining statements from BlockStmtRest node.
+// BlockStmtRest: NEWLINE BlockStatements | ε
+func extractBlockStmtRest(node parsetree.ParseTree) ([]ast.Statement, error) {
+	// Handle epsilon production
+	if _, ok := node.(*parsetree.EmptyNode); ok {
+		return []ast.Statement{}, nil
+	}
+
+	nonTerminal, ok := node.(*parsetree.NonTerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected non-terminal for block stmt rest, got %T", node)
+	}
+
+	if nonTerminal.Symbol != "BlockStmtRest" {
+		return nil, fmt.Errorf("expected BlockStmtRest node, got %s", nonTerminal.Symbol)
+	}
+
+	// Check if empty (epsilon)
+	if len(nonTerminal.Children) == 0 {
+		return []ast.Statement{}, nil
+	}
+
+	// BlockStmtRest: NEWLINE BlockStatements
+	if len(nonTerminal.Children) != 2 {
+		return nil, fmt.Errorf("BlockStmtRest node expected 0 or 2 children, got %d", len(nonTerminal.Children))
+	}
+
+	// Recursively extract statements from BlockStatements
+	return extractBlockStatements(nonTerminal.Children[1])
+}
+
+// convertFunctionLiteral converts a FunctionLiteral parse tree node to an AST FunctionLiteral.
+// FunctionLiteral: FN LPAREN ParameterList RPAREN Block
+func convertFunctionLiteral(node *parsetree.NonTerminalNode) (ast.Expression, error) {
+	if node.Symbol != "FunctionLiteral" {
+		return nil, fmt.Errorf("expected FunctionLiteral node, got %s", node.Symbol)
+	}
+
+	// FunctionLiteral: FN LPAREN ParameterList RPAREN Block
+	if len(node.Children) != 5 {
+		return nil, fmt.Errorf("FunctionLiteral node expected 5 children, got %d", len(node.Children))
+	}
+
+	// Extract fn token (child 0)
+	fnNode, ok := node.Children[0].(*parsetree.TerminalNode)
+	if !ok {
+		return nil, fmt.Errorf("expected terminal for fn keyword, got %T", node.Children[0])
+	}
+
+	// Extract parameter list (child 2)
+	params, err := extractParameterList(node.Children[2])
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract block (child 4)
+	block, err := convertBlock(node.Children[4])
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.FunctionLiteral{
+		Token:      fnNode.Token.Value,
+		Parameters: params,
+		Body:       block,
+	}, nil
 }

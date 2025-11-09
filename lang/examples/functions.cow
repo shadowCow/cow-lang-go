@@ -1,0 +1,53 @@
+fn add(x, y) {
+    return x + y
+}
+
+let result1 = add(5, 3)
+let _ = println(result1)
+
+fn multiply(a, b) {
+    return a * b
+}
+
+let result2 = multiply(4, 7)
+let _2 = println(result2)
+
+fn square(n) {
+    return n * n
+}
+
+let _3 = println(square(6))
+
+let globalVar = 10
+
+fn useGlobal(x) {
+    return x + globalVar
+}
+
+let _4 = println(useGlobal(5))
+
+let f = fn(a, b) {
+    return a - b
+}
+
+let result3 = f(20, 8)
+let _5 = println(result3)
+
+fn noParams() {
+    return 42
+}
+
+let _6 = println(noParams())
+
+fn stringConcat(s1, s2) {
+    return s1 + s2
+}
+
+let _7 = println(stringConcat("Hello", "World"))
+
+fn boolTest(a, b) {
+    return a && b
+}
+
+let _8 = println(boolTest(true, true))
+let _9 = println(boolTest(true, false))

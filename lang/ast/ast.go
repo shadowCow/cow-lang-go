@@ -135,3 +135,47 @@ type UnaryExpression struct {
 
 func (ue *UnaryExpression) expressionNode()      {}
 func (ue *UnaryExpression) TokenLiteral() string { return ue.Token }
+
+// FunctionDef represents a named function definition statement.
+// Syntax: fn name(params) { body }
+type FunctionDef struct {
+	Token      string   // The 'fn' token
+	Name       string   // The function name
+	Parameters []string // Parameter names
+	Body       *Block   // Function body
+}
+
+func (fd *FunctionDef) statementNode()       {}
+func (fd *FunctionDef) TokenLiteral() string { return fd.Token }
+
+// Block represents a block of statements enclosed in braces.
+// Used for function bodies and other block contexts.
+type Block struct {
+	Token      string      // The '{' token
+	Statements []Statement // Statements in the block
+}
+
+func (b *Block) statementNode()       {}
+func (b *Block) TokenLiteral() string { return b.Token }
+
+// ReturnStatement represents a return statement in a function.
+// Syntax: return expression
+type ReturnStatement struct {
+	Token string     // The 'return' token
+	Value Expression // The value to return
+}
+
+func (rs *ReturnStatement) statementNode()       {}
+func (rs *ReturnStatement) TokenLiteral() string { return rs.Token }
+
+// FunctionLiteral represents an anonymous function expression.
+// Syntax: fn(params) { body }
+// Enables first-class functions (assignable to variables, passable as arguments).
+type FunctionLiteral struct {
+	Token      string   // The 'fn' token
+	Parameters []string // Parameter names
+	Body       *Block   // Function body
+}
+
+func (fl *FunctionLiteral) expressionNode()      {}
+func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token }

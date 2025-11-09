@@ -13,8 +13,8 @@ func TestRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.cow")
 
-	// Simple literal (current grammar only supports single literals)
-	source := `42`
+	// Simple let statement (current grammar requires statements)
+	source := `let _ = 42`
 
 	err := os.WriteFile(testFile, []byte(source), 0644)
 	if err != nil {
@@ -28,8 +28,8 @@ func TestRun(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	// With current simple grammar, literals don't produce output
-	// They just parse successfully
+	// Let statements don't produce output
+	// They just assign values to variables
 	expected := ""
 	if output.String() != expected {
 		t.Errorf("Expected output %q, got %q", expected, output.String())
@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 
 // TestRunWithExampleFile tests running a simple example file.
 func TestRunWithExampleFile(t *testing.T) {
-	// Path to the simple example file (just a literal)
+	// Path to the simple example file (just a let statement)
 	exampleFile := "../examples/simple_literal.cow"
 
 	// Check if file exists
@@ -53,7 +53,7 @@ func TestRunWithExampleFile(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	// With current simple grammar, literals don't produce output
+	// Let statements don't produce output
 	expected := ""
 	if output.String() != expected {
 		t.Errorf("Expected output %q, got %q", expected, output.String())
@@ -99,7 +99,7 @@ func TestRunParserError(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "parser_error.cow")
 
-	// Identifier is not in the current simple grammar (only literals)
+	// Standalone identifier is not valid (only let statements or function defs)
 	source := "some_identifier"
 
 	err := os.WriteFile(testFile, []byte(source), 0644)

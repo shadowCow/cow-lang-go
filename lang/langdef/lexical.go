@@ -17,9 +17,11 @@ const (
 	TOKEN_RAW_STRING grammar.TokenType = "RAW_STRING" // `...` raw string
 
 	// Keywords
-	TOKEN_LET   grammar.TokenType = "LET"   // let keyword for variable declaration
-	TOKEN_TRUE  grammar.TokenType = "TRUE"  // true boolean literal
-	TOKEN_FALSE grammar.TokenType = "FALSE" // false boolean literal
+	TOKEN_LET    grammar.TokenType = "LET"    // let keyword for variable declaration
+	TOKEN_FN     grammar.TokenType = "FN"     // fn keyword for function declaration
+	TOKEN_RETURN grammar.TokenType = "RETURN" // return keyword for function return
+	TOKEN_TRUE   grammar.TokenType = "TRUE"   // true boolean literal
+	TOKEN_FALSE  grammar.TokenType = "FALSE"  // false boolean literal
 
 	// Identifiers
 	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
@@ -50,6 +52,8 @@ const (
 	// Punctuation
 	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
 	TOKEN_RPAREN grammar.TokenType = "RPAREN" // )
+	TOKEN_LBRACE grammar.TokenType = "LBRACE" // {
+	TOKEN_RBRACE grammar.TokenType = "RBRACE" // }
 	TOKEN_COMMA  grammar.TokenType = "COMMA"  // ,
 
 	// Whitespace and separators
@@ -152,6 +156,16 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_FALSE,
 				Pattern:  grammar.Literal("false"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_FN,
+				Pattern:  grammar.Literal("fn"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_RETURN,
+				Pattern:  grammar.Literal("return"),
 				Priority: 5,
 			},
 
@@ -359,6 +373,16 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_COMMA,
 				Pattern:  grammar.Literal(","),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_LBRACE,
+				Pattern:  grammar.Literal("{"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_RBRACE,
+				Pattern:  grammar.Literal("}"),
 				Priority: 1,
 			},
 
