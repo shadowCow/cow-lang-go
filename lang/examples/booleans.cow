@@ -1,38 +1,38 @@
 let a = true
-let _ = println(a)
+println(a)
 let b = false
-let _2 = println(b)
+println(b)
 let c = !true
-let _3 = println(c)
+println(c)
 let d = !false
-let _4 = println(d)
+println(d)
 let e = 5 < 10
-let _5 = println(e)
+println(e)
 let f = 10 > 5
-let _6 = println(f)
+println(f)
 let g = 5 <= 5
-let _7 = println(g)
+println(g)
 let h = 5 >= 5
-let _8 = println(h)
+println(h)
 let i = 5 == 5
-let _9 = println(i)
+println(i)
 let j = 5 != 10
-let _10 = println(j)
+println(j)
 let k = true && true
-let _11 = println(k)
+println(k)
 let l = true && false
-let _12 = println(l)
+println(l)
 let m = false || true
-let _13 = println(m)
+println(m)
 let n = false || false
-let _14 = println(n)
+println(n)
 let o = 3 < 5 && 10 > 2
-let _15 = println(o)
+println(o)
 let p = 3 > 5 || 10 > 2
-let _16 = println(p)
+println(p)
 let q = !(3 < 5)
-let _17 = println(q)
+println(q)
 let r = 3 + 2 == 5
-let _18 = println(r)
+println(r)
 let s = 10 / 2 > 3
-let _19 = println(s)
+println(s)

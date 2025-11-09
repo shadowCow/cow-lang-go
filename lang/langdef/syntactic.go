@@ -10,9 +10,10 @@ const (
 	SYM_PROGRAM              grammar.Symbol = "Program"
 	SYM_PROGRAM_REST         grammar.Symbol = "ProgramRest"
 	SYM_PROGRAM_REST2        grammar.Symbol = "ProgramRest2"
-	SYM_TOP_LEVEL_ITEM       grammar.Symbol = "TopLevelItem"
-	SYM_TOP_LEVEL_ITEM_REST  grammar.Symbol = "TopLevelItemRest"
-	SYM_TOP_LEVEL_ITEM_REST2 grammar.Symbol = "TopLevelItemRest2"
+	SYM_TOP_LEVEL_ITEM        grammar.Symbol = "TopLevelItem"
+	SYM_TOP_LEVEL_ITEM_REST   grammar.Symbol = "TopLevelItemRest"
+	SYM_TOP_LEVEL_ITEM_REST2  grammar.Symbol = "TopLevelItemRest2"
+	SYM_TOP_LEVEL_EXPRESSION  grammar.Symbol = "TopLevelExpression"
 
 	// Statements
 	SYM_STATEMENT            grammar.Symbol = "Statement"
@@ -152,12 +153,18 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // empty sequence = epsilon
 			},
 
-			// TopLevelItem can be a function definition or specific statement types
-			// Functions can only be defined at top level (not inside blocks)
-			// ExpressionStatement not allowed at top level to avoid LL(1) conflict with FunctionLiteral
+			// TopLevelItem can be a function definition, let statement, or top-level expression
+			// Top-level expressions use TopLevelExpression (not Expression) to avoid LL(1) conflict with FunctionDef
+			// FunctionLiterals can still be used in let statements and function arguments
 			SYM_TOP_LEVEL_ITEM: grammar.SynAlternative{
 				grammar.NonTerminal{Symbol: SYM_FUNCTION_DEF},
 				grammar.NonTerminal{Symbol: SYM_LET_STATEMENT},
+				grammar.NonTerminal{Symbol: SYM_TOP_LEVEL_EXPRESSION},
+			},
+
+			// TopLevelExpression: LogicalOr (expression without FunctionLiteral at top level)
+			SYM_TOP_LEVEL_EXPRESSION: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
 			},
 
 			// Statement can be a let statement, return statement, or expression statement
@@ -177,8 +184,8 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 			},
 
 			// ExpressionStatement: Expression
-			SYM_EXPRESSION_STATEMENT: grammar.NonTerminal{
-				Symbol: SYM_EXPRESSION,
+			SYM_EXPRESSION_STATEMENT: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
 			},
 
 			// FunctionDef: FN IDENTIFIER LPAREN ParameterList RPAREN Block
@@ -246,8 +253,14 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // epsilon - allows last statement without trailing newline
 			},
 
-			// Expression: LogicalOr
-			SYM_EXPRESSION: grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+			// Expression: LogicalOr | FunctionLiteral
+			// FunctionLiteral is at this level (not in Primary) to avoid LL(1) conflict with FunctionDef at top level
+			SYM_EXPRESSION: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+				},
+				grammar.NonTerminal{Symbol: SYM_FUNCTION_LITERAL},
+			},
 
 			// LogicalOr: LogicalAnd LogicalOrRest
 			SYM_LOGICAL_OR: grammar.SynSequence{
@@ -387,7 +400,8 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_MINUS},
 			},
 
-			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN | FunctionLiteral
+			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+			// NOTE: FunctionLiteral removed to avoid LL(1) conflict with FunctionDef at top level
 			SYM_PRIMARY: grammar.SynAlternative{
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
@@ -399,7 +413,6 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
 					grammar.Terminal{TokenType: TOKEN_RPAREN},
 				},
-				grammar.NonTerminal{Symbol: SYM_FUNCTION_LITERAL},
 			},
 
 			// PrimaryRest: LPAREN Arguments RPAREN | ε

@@ -65,12 +65,29 @@ func convertTopLevelItem(node parsetree.ParseTree) (ast.Statement, error) {
 		return nil, fmt.Errorf("expected TopLevelItem, got %s", nonTerminal.Symbol)
 	}
 
-	// TopLevelItem should have one child: FunctionDef or Statement
+	// TopLevelItem should have one child: FunctionDef, LetStatement, or TopLevelExpression
 	if len(nonTerminal.Children) != 1 {
 		return nil, fmt.Errorf("TopLevelItem expected 1 child, got %d", len(nonTerminal.Children))
 	}
 
-	return convertToStatement(nonTerminal.Children[0])
+	child := nonTerminal.Children[0]
+
+	// Check if it's TopLevelExpression (needs to be wrapped in ExpressionStatement)
+	if childNonTerm, ok := child.(*parsetree.NonTerminalNode); ok {
+		if childNonTerm.Symbol == "TopLevelExpression" {
+			// Convert to expression and wrap in ExpressionStatement
+			expr, err := convertToExpression(childNonTerm.Children[0]) // TopLevelExpression has one child: LogicalOr
+			if err != nil {
+				return nil, err
+			}
+			return &ast.ExpressionStatement{
+				Token:      "", // Will be set by evaluator
+				Expression: expr,
+			}, nil
+		}
+	}
+
+	return convertToStatement(child)
 }
 
 // extractTopLevelItemRest extracts remaining top-level items.
@@ -351,11 +368,22 @@ func convertToExpression(node parsetree.ParseTree) (ast.Expression, error) {
 		// Non-terminal node - check what symbol it is
 		switch n.Symbol {
 		case "Expression":
-			// Expression: LogicalOr
+			// Expression: LogicalOr | FunctionLiteral
 			if len(n.Children) != 1 {
 				return nil, fmt.Errorf("Expression node expected 1 child, got %d", len(n.Children))
 			}
-			return convertToExpression(n.Children[0])
+			// The child is either a sequence containing LogicalOr, or FunctionLiteral
+			child := n.Children[0]
+			if childNonTerm, ok := child.(*parsetree.NonTerminalNode); ok {
+				if childNonTerm.Symbol == "FunctionLiteral" {
+					return convertFunctionLiteral(childNonTerm)
+				}
+				// Otherwise it's a sequence containing LogicalOr - unwrap it
+				if len(childNonTerm.Children) == 1 {
+					return convertToExpression(childNonTerm.Children[0])
+				}
+			}
+			return convertToExpression(child)
 
 		case "LogicalOr":
 			// LogicalOr: LogicalAnd LogicalOrRest
