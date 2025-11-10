@@ -21,6 +21,10 @@ const (
 	SYM_EXPRESSION_STATEMENT grammar.Symbol = "ExpressionStatement"
 	SYM_FUNCTION_DEF         grammar.Symbol = "FunctionDef"
 	SYM_RETURN_STATEMENT     grammar.Symbol = "ReturnStatement"
+	SYM_FOR_STATEMENT        grammar.Symbol = "ForStatement"
+	SYM_FOR_CONDITION        grammar.Symbol = "ForCondition"
+	SYM_BREAK_STATEMENT      grammar.Symbol = "BreakStatement"
+	SYM_CONTINUE_STATEMENT   grammar.Symbol = "ContinueStatement"
 	SYM_BLOCK                grammar.Symbol = "Block"
 	SYM_BLOCK_STATEMENTS     grammar.Symbol = "BlockStatements"
 	SYM_BLOCK_STMT_REST      grammar.Symbol = "BlockStmtRest"
@@ -198,12 +202,15 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // epsilon
 			},
 
-			// Statement: LET... | RETURN... | ExpressionStatement
+			// Statement: LET... | RETURN... | FOR... | BREAK | CONTINUE | ExpressionStatement
 			// Note: FunctionDef removed from here to avoid LL(1) conflict with FunctionLiteral
 			// Note: Index assignment (arr[0] = 5) is parsed as expression then converted
 			SYM_STATEMENT: grammar.SynAlternative{
 				grammar.NonTerminal{Symbol: SYM_LET_STATEMENT},
 				grammar.NonTerminal{Symbol: SYM_RETURN_STATEMENT},
+				grammar.NonTerminal{Symbol: SYM_FOR_STATEMENT},
+				grammar.NonTerminal{Symbol: SYM_BREAK_STATEMENT},
+				grammar.NonTerminal{Symbol: SYM_CONTINUE_STATEMENT},
 				grammar.NonTerminal{Symbol: SYM_EXPRESSION_STATEMENT},
 			},
 
@@ -254,6 +261,31 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 			SYM_RETURN_STATEMENT: grammar.SynSequence{
 				grammar.Terminal{TokenType: TOKEN_RETURN},
 				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+			},
+
+			// ForStatement: FOR ForCondition Block
+			// Handles both infinite loops (for {}) and condition loops (for condition {})
+			SYM_FOR_STATEMENT: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_FOR},
+				grammar.NonTerminal{Symbol: SYM_FOR_CONDITION},
+				grammar.NonTerminal{Symbol: SYM_BLOCK},
+			},
+
+			// ForCondition: Expression | ε
+			// Empty (epsilon) for infinite loops, Expression for condition loops
+			SYM_FOR_CONDITION: grammar.SynAlternative{
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+				grammar.SynSequence{}, // epsilon for infinite loop
+			},
+
+			// BreakStatement: BREAK
+			SYM_BREAK_STATEMENT: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_BREAK},
+			},
+
+			// ContinueStatement: CONTINUE
+			SYM_CONTINUE_STATEMENT: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_CONTINUE},
 			},
 
 			// IndexAssignment: IDENTIFIER IndexChain EQUALS Expression

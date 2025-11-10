@@ -52,6 +52,11 @@ func TestCLIWithExamples(t *testing.T) {
 			args:     []string{"cow-lang", "../../examples/functions.cow"},
 			expected: "8\n28\n36\n15\n12\n42\nHelloWorld\ntrue\nfalse\n",
 		},
+		{
+			name:     "loops_simple",
+			args:     []string{"cow-lang", "../../examples/loops_simple.cow"},
+			expected: "1\n",
+		},
 	}
 
 	for _, tt := range tests {

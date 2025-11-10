@@ -1,0 +1,11 @@
+fn testBasicLoop() {
+    let numbers = [1, 2, 3, 4, 5]
+    let idx = [0]
+    for idx[0] < 3 {
+        println(numbers[idx[0]])
+        break
+    }
+    return 0
+}
+
+testBasicLoop()

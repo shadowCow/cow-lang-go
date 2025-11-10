@@ -168,6 +168,35 @@ type ReturnStatement struct {
 func (rs *ReturnStatement) statementNode()       {}
 func (rs *ReturnStatement) TokenLiteral() string { return rs.Token }
 
+// ForStatement represents a for loop.
+// Syntax: for { body } (infinite) or for condition { body } (while-style)
+type ForStatement struct {
+	Token     string      // The 'for' token
+	Condition Expression  // Optional condition (nil for infinite loops)
+	Body      *Block      // Loop body
+}
+
+func (fs *ForStatement) statementNode()       {}
+func (fs *ForStatement) TokenLiteral() string { return fs.Token }
+
+// BreakStatement represents a break statement to exit a loop.
+// Syntax: break
+type BreakStatement struct {
+	Token string // The 'break' token
+}
+
+func (bs *BreakStatement) statementNode()       {}
+func (bs *BreakStatement) TokenLiteral() string { return bs.Token }
+
+// ContinueStatement represents a continue statement to skip to next iteration.
+// Syntax: continue
+type ContinueStatement struct {
+	Token string // The 'continue' token
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token }
+
 // FunctionLiteral represents an anonymous function expression.
 // Syntax: fn(params) { body }
 // Enables first-class functions (assignable to variables, passable as arguments).

@@ -52,6 +52,48 @@ type Function struct {
 	// Note: No Env field - we don't capture closures, only access globals
 }
 
+// ControlFlow represents control flow signals (break, continue, return).
+// These are used as special error values to manage control flow in loops and functions.
+type ControlFlow struct {
+	Type string // "break", "continue", or "return"
+}
+
+// Error implements the error interface for ControlFlow.
+func (cf *ControlFlow) Error() string {
+	return cf.Type
+}
+
+// Helper functions to create control flow signals
+func breakSignal() error {
+	return &ControlFlow{Type: "break"}
+}
+
+func continueSignal() error {
+	return &ControlFlow{Type: "continue"}
+}
+
+// isBreak checks if an error is a break signal
+func isBreak(err error) bool {
+	if cf, ok := err.(*ControlFlow); ok {
+		return cf.Type == "break"
+	}
+	return false
+}
+
+// isContinue checks if an error is a continue signal
+func isContinue(err error) bool {
+	if cf, ok := err.(*ControlFlow); ok {
+		return cf.Type == "continue"
+	}
+	return false
+}
+
+// isControlFlow checks if an error is any control flow signal
+func isControlFlow(err error) bool {
+	_, ok := err.(*ControlFlow)
+	return ok
+}
+
 // Evaluator holds the state during evaluation.
 type Evaluator struct {
 	output io.Writer     // Where to write println output
@@ -101,6 +143,17 @@ func (e *Evaluator) evalStatement(stmt ast.Statement) error {
 
 	case *ast.IndexAssignment:
 		return e.evalIndexAssignment(s)
+
+	case *ast.ForStatement:
+		return e.evalForStatement(s)
+
+	case *ast.BreakStatement:
+		// Break signals loop exit via control flow
+		return breakSignal()
+
+	case *ast.ContinueStatement:
+		// Continue signals skip to next iteration via control flow
+		return continueSignal()
 
 	default:
 		return fmt.Errorf("unknown statement type: %T", stmt)
@@ -859,6 +912,49 @@ func (e *Evaluator) evalIndexAssignment(stmt *ast.IndexAssignment) error {
 	// unless this was a single-level array (no nested indices)
 	if len(stmt.Indices) == 1 {
 		e.env.Set(stmt.Name, arr)
+	}
+
+	return nil
+}
+
+// evalForStatement evaluates a for loop.
+// Supports both infinite loops (for {}) and condition loops (for condition {}).
+func (e *Evaluator) evalForStatement(stmt *ast.ForStatement) error {
+	// Infinite loop or condition loop
+	for {
+		// If there's a condition, evaluate it
+		if stmt.Condition != nil {
+			condValue, err := e.evalExpression(stmt.Condition)
+			if err != nil {
+				return fmt.Errorf("error evaluating loop condition: %v", err)
+			}
+
+			// Check if condition is a boolean
+			condBool, ok := condValue.(bool)
+			if !ok {
+				return fmt.Errorf("loop condition must be boolean, got %T", condValue)
+			}
+
+			// If condition is false, exit loop
+			if !condBool {
+				break
+			}
+		}
+
+		// Execute loop body
+		_, err := e.evalBlock(stmt.Body)
+		if err != nil {
+			// Check for control flow signals
+			if isBreak(err) {
+				// Break out of loop
+				break
+			} else if isContinue(err) {
+				// Continue to next iteration
+				continue
+			}
+			// Any other error is a real error
+			return err
+		}
 	}
 
 	return nil

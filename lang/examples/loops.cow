@@ -1,0 +1,32 @@
+fn testInfiniteLoopWithBreak() {
+    println("Infinite loop with break:")
+    let numbers = [1, 2, 3]
+    for {
+        println(numbers[0])
+        break
+    }
+    return 0
+}
+
+fn testConditionLoop() {
+    println("Condition loop:")
+    let arr = [true, false]
+    for arr[0] {
+        println("Loop body executed")
+        arr[0] = false
+    }
+    return 0
+}
+
+fn testIterateArray() {
+    println("Iterating array elements:")
+    let numbers = [10, 20, 30, 40, 50]
+    println(numbers[0])
+    println(numbers[1])
+    println(numbers[2])
+    return 0
+}
+
+testInfiniteLoopWithBreak()
+testConditionLoop()
+testIterateArray()

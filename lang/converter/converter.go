@@ -283,6 +283,35 @@ func convertToStatement(node parsetree.ParseTree) (ast.Statement, error) {
 				return nil, fmt.Errorf("ExpressionStatement node expected 1 child, got %d", len(n.Children))
 			}
 
+			// Check if the expression is actually an assignment (arr[0] = value)
+			// Expression -> Assignment -> LogicalOr AssignmentRest
+			exprNode := n.Children[0]
+			if exprNonTerm, ok := exprNode.(*parsetree.NonTerminalNode); ok {
+				if exprNonTerm.Symbol == "Expression" && len(exprNonTerm.Children) == 1 {
+					// Unwrap to get Assignment or FunctionLiteral
+					innerNode := exprNonTerm.Children[0]
+					if innerNonTerm, ok := innerNode.(*parsetree.NonTerminalNode); ok {
+						// Check if it's an Assignment sequence
+						if len(innerNonTerm.Children) == 1 {
+							// It's a SynSequence wrapping Assignment
+							assignmentNode := innerNonTerm.Children[0]
+							if assignNonTerm, ok := assignmentNode.(*parsetree.NonTerminalNode); ok && assignNonTerm.Symbol == "Assignment" {
+								if len(assignNonTerm.Children) == 2 {
+									// Check AssignmentRest
+									assignmentRest := assignNonTerm.Children[1]
+									if restNode, ok := assignmentRest.(*parsetree.NonTerminalNode); ok && len(restNode.Children) > 0 {
+										// Has assignment: EQUALS Assignment
+										// This is an index assignment: arr[0] = value
+										return convertIndexAssignmentFromExpression(assignNonTerm)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Not an assignment, convert as regular expression
 			expr, err := convertToExpression(n.Children[0])
 			if err != nil {
 				return nil, err
@@ -382,6 +411,77 @@ func convertToStatement(node parsetree.ParseTree) (ast.Statement, error) {
 			return &ast.ReturnStatement{
 				Token: returnNode.Token.Value,
 				Value: valueExpr,
+			}, nil
+
+		case "ForStatement":
+			// ForStatement: FOR ForCondition Block
+			if len(n.Children) != 3 {
+				return nil, fmt.Errorf("ForStatement node expected 3 children, got %d", len(n.Children))
+			}
+
+			// Extract for token (child 0)
+			forNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for for keyword, got %T", n.Children[0])
+			}
+
+			// Extract condition (child 1) - could be epsilon for infinite loop
+			var condition ast.Expression
+			forCondition := n.Children[1]
+			if condNode, ok := forCondition.(*parsetree.NonTerminalNode); ok {
+				if len(condNode.Children) > 0 {
+					// Has condition
+					var err error
+					condition, err = convertToExpression(condNode.Children[0])
+					if err != nil {
+						return nil, fmt.Errorf("error converting for condition: %v", err)
+					}
+				}
+				// else: epsilon, condition remains nil for infinite loop
+			}
+
+			// Extract body block (child 2)
+			body, err := convertBlock(n.Children[2])
+			if err != nil {
+				return nil, fmt.Errorf("error converting for body: %v", err)
+			}
+
+			return &ast.ForStatement{
+				Token:     forNode.Token.Value,
+				Condition: condition,
+				Body:      body,
+			}, nil
+
+		case "BreakStatement":
+			// BreakStatement: BREAK
+			if len(n.Children) != 1 {
+				return nil, fmt.Errorf("BreakStatement node expected 1 child, got %d", len(n.Children))
+			}
+
+			// Extract break token (child 0)
+			breakNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for break keyword, got %T", n.Children[0])
+			}
+
+			return &ast.BreakStatement{
+				Token: breakNode.Token.Value,
+			}, nil
+
+		case "ContinueStatement":
+			// ContinueStatement: CONTINUE
+			if len(n.Children) != 1 {
+				return nil, fmt.Errorf("ContinueStatement node expected 1 child, got %d", len(n.Children))
+			}
+
+			// Extract continue token (child 0)
+			continueNode, ok := n.Children[0].(*parsetree.TerminalNode)
+			if !ok {
+				return nil, fmt.Errorf("expected terminal for continue keyword, got %T", n.Children[0])
+			}
+
+			return &ast.ContinueStatement{
+				Token: continueNode.Token.Value,
 			}, nil
 
 		case "Block":

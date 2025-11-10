@@ -17,11 +17,14 @@ const (
 	TOKEN_RAW_STRING grammar.TokenType = "RAW_STRING" // `...` raw string
 
 	// Keywords
-	TOKEN_LET    grammar.TokenType = "LET"    // let keyword for variable declaration
-	TOKEN_FN     grammar.TokenType = "FN"     // fn keyword for function declaration
-	TOKEN_RETURN grammar.TokenType = "RETURN" // return keyword for function return
-	TOKEN_TRUE   grammar.TokenType = "TRUE"   // true boolean literal
-	TOKEN_FALSE  grammar.TokenType = "FALSE"  // false boolean literal
+	TOKEN_LET      grammar.TokenType = "LET"      // let keyword for variable declaration
+	TOKEN_FN       grammar.TokenType = "FN"       // fn keyword for function declaration
+	TOKEN_RETURN   grammar.TokenType = "RETURN"   // return keyword for function return
+	TOKEN_FOR      grammar.TokenType = "FOR"      // for keyword for loops
+	TOKEN_BREAK    grammar.TokenType = "BREAK"    // break keyword to exit loops
+	TOKEN_CONTINUE grammar.TokenType = "CONTINUE" // continue keyword to skip to next iteration
+	TOKEN_TRUE     grammar.TokenType = "TRUE"     // true boolean literal
+	TOKEN_FALSE    grammar.TokenType = "FALSE"    // false boolean literal
 
 	// Identifiers
 	TOKEN_IDENTIFIER grammar.TokenType = "IDENTIFIER" // function names, variable names
@@ -169,6 +172,21 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_RETURN,
 				Pattern:  grammar.Literal("return"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_FOR,
+				Pattern:  grammar.Literal("for"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_BREAK,
+				Pattern:  grammar.Literal("break"),
+				Priority: 5,
+			},
+			{
+				Name:     TOKEN_CONTINUE,
+				Pattern:  grammar.Literal("continue"),
 				Priority: 5,
 			},
 
