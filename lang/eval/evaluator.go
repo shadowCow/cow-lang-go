@@ -5,6 +5,7 @@ package eval
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/shadowCow/cow-lang-go/lang/ast"
 )
@@ -98,6 +99,9 @@ func (e *Evaluator) evalStatement(stmt ast.Statement) error {
 		_, err := e.evalBlock(s)
 		return err
 
+	case *ast.IndexAssignment:
+		return e.evalIndexAssignment(s)
+
 	default:
 		return fmt.Errorf("unknown statement type: %T", stmt)
 	}
@@ -147,6 +151,15 @@ func (e *Evaluator) evalExpression(expr ast.Expression) (interface{}, error) {
 	case *ast.FunctionLiteral:
 		return e.evalFunctionLiteral(ex)
 
+	case *ast.ArrayLiteral:
+		return e.evalArrayLiteral(ex)
+
+	case *ast.IndexAccess:
+		return e.evalIndexAccess(ex)
+
+	case *ast.MemberAccess:
+		return e.evalMemberAccess(ex)
+
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -181,6 +194,19 @@ func (e *Evaluator) evalFunctionCall(call *ast.FunctionCall) (interface{}, error
 		return nil, nil
 	}
 
+	// Check for array method calls (like len, push, pop)
+	// These are represented as function calls where the first argument is the array object
+	if len(call.Arguments) > 0 {
+		// Evaluate first argument to see if it's an ArrayMethod
+		firstArg, err := e.evalExpression(call.Arguments[0])
+		if err == nil {
+			if arrayMethod, ok := firstArg.(*ArrayMethod); ok {
+				// This is a method call on an array
+				return e.callArrayMethod(arrayMethod, call.Arguments[1:])
+			}
+		}
+	}
+
 	// Look up user-defined function
 	fnValue, exists := e.env.Get(call.Name)
 	if !exists {
@@ -197,6 +223,72 @@ func (e *Evaluator) evalFunctionCall(call *ast.FunctionCall) (interface{}, error
 	return e.callUserFunction(fn, call.Arguments)
 }
 
+// callArrayMethod calls an array method (len, push, pop)
+func (e *Evaluator) callArrayMethod(method *ArrayMethod, args []ast.Expression) (interface{}, error) {
+	switch method.Method {
+	case "len":
+		// len() takes no arguments and returns the length
+		if len(args) != 0 {
+			return nil, fmt.Errorf("len() takes no arguments, got %d", len(args))
+		}
+		return int64(len(method.Array)), nil
+
+	case "push":
+		// push(item) appends an item and returns nil
+		if len(args) != 1 {
+			return nil, fmt.Errorf("push() takes exactly 1 argument, got %d", len(args))
+		}
+
+		// Evaluate the item to push
+		item, err := e.evalExpression(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating push argument: %v", err)
+		}
+
+		// Append to the array
+		newArray := append(method.Array, item)
+
+		// Update the array in the environment
+		// We need to get the identifier name from the object expression
+		if ident, ok := method.Object.(*ast.Identifier); ok {
+			e.env.Set(ident.Name, newArray)
+		} else {
+			return nil, fmt.Errorf("push() only supported on simple identifiers, not complex expressions")
+		}
+
+		return nil, nil
+
+	case "pop":
+		// pop() removes and returns the last element
+		if len(args) != 0 {
+			return nil, fmt.Errorf("pop() takes no arguments, got %d", len(args))
+		}
+
+		if len(method.Array) == 0 {
+			return nil, fmt.Errorf("cannot pop from empty array")
+		}
+
+		// Get the last element
+		lastIndex := len(method.Array) - 1
+		lastElement := method.Array[lastIndex]
+
+		// Remove the last element
+		newArray := method.Array[:lastIndex]
+
+		// Update the array in the environment
+		if ident, ok := method.Object.(*ast.Identifier); ok {
+			e.env.Set(ident.Name, newArray)
+		} else {
+			return nil, fmt.Errorf("pop() only supported on simple identifiers, not complex expressions")
+		}
+
+		return lastElement, nil
+
+	default:
+		return nil, fmt.Errorf("unknown array method: %s", method.Method)
+	}
+}
+
 // println prints a value to the output writer.
 func (e *Evaluator) println(value interface{}) error {
 	var str string
@@ -210,12 +302,41 @@ func (e *Evaluator) println(value interface{}) error {
 		str = fmt.Sprintf("%t\n", v)
 	case string:
 		str = fmt.Sprintf("%s\n", v)
+	case []interface{}:
+		str = e.formatArray(v) + "\n"
 	default:
 		return fmt.Errorf("cannot print value of type %T", value)
 	}
 
 	_, err := e.output.Write([]byte(str))
 	return err
+}
+
+// formatArray formats an array for printing.
+func (e *Evaluator) formatArray(arr []interface{}) string {
+	if len(arr) == 0 {
+		return "[]"
+	}
+
+	parts := make([]string, len(arr))
+	for i, elem := range arr {
+		switch v := elem.(type) {
+		case int64:
+			parts[i] = fmt.Sprintf("%d", v)
+		case float64:
+			parts[i] = fmt.Sprintf("%g", v)
+		case bool:
+			parts[i] = fmt.Sprintf("%t", v)
+		case string:
+			parts[i] = fmt.Sprintf("%q", v)
+		case []interface{}:
+			parts[i] = e.formatArray(v)
+		default:
+			parts[i] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // evalUnaryExpression evaluates a unary expression (e.g., !true, -5).
@@ -585,4 +706,160 @@ func (e *Evaluator) callUserFunction(fn *Function, args []ast.Expression) (inter
 
 	// This shouldn't happen if evalBlock works correctly
 	return nil, fmt.Errorf("function did not return properly")
+}
+
+// evalArrayLiteral evaluates an array literal expression.
+// Returns a Go slice ([]interface{}) containing the evaluated elements.
+func (e *Evaluator) evalArrayLiteral(expr *ast.ArrayLiteral) (interface{}, error) {
+	elements := make([]interface{}, len(expr.Elements))
+
+	for i, elemExpr := range expr.Elements {
+		val, err := e.evalExpression(elemExpr)
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating array element %d: %v", i, err)
+		}
+		elements[i] = val
+	}
+
+	return elements, nil
+}
+
+// evalIndexAccess evaluates array indexing: arr[index]
+func (e *Evaluator) evalIndexAccess(expr *ast.IndexAccess) (interface{}, error) {
+	// Evaluate the object being indexed
+	obj, err := e.evalExpression(expr.Object)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating indexed object: %v", err)
+	}
+
+	// Check if it's an array
+	arr, ok := obj.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("cannot index non-array type: %T", obj)
+	}
+
+	// Evaluate the index expression
+	indexVal, err := e.evalExpression(expr.Index)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating index: %v", err)
+	}
+
+	// Convert index to int64
+	index, ok := indexVal.(int64)
+	if !ok {
+		return nil, fmt.Errorf("array index must be an integer, got %T", indexVal)
+	}
+
+	// Bounds check
+	if index < 0 || index >= int64(len(arr)) {
+		return nil, fmt.Errorf("array index out of bounds: index %d, length %d", index, len(arr))
+	}
+
+	return arr[index], nil
+}
+
+// evalMemberAccess evaluates member access: obj.member
+// For arrays, this is used to access methods like len, push, pop
+func (e *Evaluator) evalMemberAccess(expr *ast.MemberAccess) (interface{}, error) {
+	// Evaluate the object
+	obj, err := e.evalExpression(expr.Object)
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating object for member access: %v", err)
+	}
+
+	// Check if it's an array
+	arr, ok := obj.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("member access only supported on arrays, got %T", obj)
+	}
+
+	// Return a callable that represents the method bound to this array
+	// We'll return a special function value that knows about the array and method
+	return &ArrayMethod{
+		Array:  arr,
+		Method: expr.Member,
+		Object: expr.Object, // Keep object expression for updates
+	}, nil
+}
+
+// ArrayMethod represents a method bound to an array instance
+type ArrayMethod struct {
+	Array  []interface{}
+	Method string
+	Object ast.Expression // The original object expression (for mutations)
+}
+
+// evalIndexAssignment evaluates assignment to an array index: arr[index] = value
+func (e *Evaluator) evalIndexAssignment(stmt *ast.IndexAssignment) error {
+	// Get the array from the environment
+	arrValue, exists := e.env.Get(stmt.Name)
+	if !exists {
+		return fmt.Errorf("undefined variable: %s", stmt.Name)
+	}
+
+	// Navigate through the index chain to find the target array and final index
+	currentArray := arrValue
+	for i := 0; i < len(stmt.Indices)-1; i++ {
+		// Evaluate this index
+		indexVal, err := e.evalExpression(stmt.Indices[i])
+		if err != nil {
+			return fmt.Errorf("error evaluating index %d: %v", i, err)
+		}
+
+		index, ok := indexVal.(int64)
+		if !ok {
+			return fmt.Errorf("array index must be an integer, got %T", indexVal)
+		}
+
+		// Get the nested array
+		arr, ok := currentArray.([]interface{})
+		if !ok {
+			return fmt.Errorf("cannot index non-array type: %T", currentArray)
+		}
+
+		if index < 0 || index >= int64(len(arr)) {
+			return fmt.Errorf("array index out of bounds: index %d, length %d", index, len(arr))
+		}
+
+		currentArray = arr[index]
+	}
+
+	// Now currentArray is the final array to modify
+	arr, ok := currentArray.([]interface{})
+	if !ok {
+		return fmt.Errorf("cannot index non-array type: %T", currentArray)
+	}
+
+	// Evaluate the final index
+	finalIndexVal, err := e.evalExpression(stmt.Indices[len(stmt.Indices)-1])
+	if err != nil {
+		return fmt.Errorf("error evaluating final index: %v", err)
+	}
+
+	finalIndex, ok := finalIndexVal.(int64)
+	if !ok {
+		return fmt.Errorf("array index must be an integer, got %T", finalIndexVal)
+	}
+
+	// Bounds check
+	if finalIndex < 0 || finalIndex >= int64(len(arr)) {
+		return fmt.Errorf("array index out of bounds: index %d, length %d", finalIndex, len(arr))
+	}
+
+	// Evaluate the value to assign
+	value, err := e.evalExpression(stmt.Value)
+	if err != nil {
+		return fmt.Errorf("error evaluating assignment value: %v", err)
+	}
+
+	// Perform the assignment
+	arr[finalIndex] = value
+
+	// Note: The slice is modified in place, so we don't need to update the environment
+	// unless this was a single-level array (no nested indices)
+	if len(stmt.Indices) == 1 {
+		e.env.Set(stmt.Name, arr)
+	}
+
+	return nil
 }

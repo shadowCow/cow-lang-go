@@ -75,6 +75,19 @@ const (
 
 	// Literal values
 	SYM_LITERAL grammar.Symbol = "Literal"
+
+	// Array expressions
+	SYM_ARRAY_LITERAL  grammar.Symbol = "ArrayLiteral"
+	SYM_ARRAY_CONTENT  grammar.Symbol = "ArrayContent"
+	SYM_ELEMENT_LIST   grammar.Symbol = "ElementList"
+	SYM_ELEMENT_REST   grammar.Symbol = "ElementRest"
+
+	// Index assignment
+	SYM_INDEX_ASSIGNMENT  grammar.Symbol = "IndexAssignment"
+	SYM_INDEX_CHAIN       grammar.Symbol = "IndexChain"
+	SYM_INDEX_CHAIN_REST  grammar.Symbol = "IndexChainRest"
+	SYM_ASSIGNMENT        grammar.Symbol = "Assignment"
+	SYM_ASSIGNMENT_REST   grammar.Symbol = "AssignmentRest"
 )
 
 // GetSyntacticGrammar returns the syntactic grammar for the Cow language.
@@ -163,12 +176,31 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 			},
 
 			// TopLevelExpression: LogicalOr (expression without FunctionLiteral at top level)
+			// TopLevelExpression: Assignment
+			// Includes assignment at the top level for statements like arr[0] = 5
 			SYM_TOP_LEVEL_EXPRESSION: grammar.SynSequence{
-				grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+				grammar.NonTerminal{Symbol: SYM_ASSIGNMENT},
 			},
 
-			// Statement can be a let statement, return statement, or expression statement
+			// Assignment: LogicalOr AssignmentRest
+			// Lowest precedence operator, right-associative
+			SYM_ASSIGNMENT: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+				grammar.NonTerminal{Symbol: SYM_ASSIGNMENT_REST},
+			},
+
+			// AssignmentRest: EQUALS Assignment | ε
+			SYM_ASSIGNMENT_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_EQUALS},
+					grammar.NonTerminal{Symbol: SYM_ASSIGNMENT},
+				},
+				grammar.SynSequence{}, // epsilon
+			},
+
+			// Statement: LET... | RETURN... | ExpressionStatement
 			// Note: FunctionDef removed from here to avoid LL(1) conflict with FunctionLiteral
+			// Note: Index assignment (arr[0] = 5) is parsed as expression then converted
 			SYM_STATEMENT: grammar.SynAlternative{
 				grammar.NonTerminal{Symbol: SYM_LET_STATEMENT},
 				grammar.NonTerminal{Symbol: SYM_RETURN_STATEMENT},
@@ -184,6 +216,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 			},
 
 			// ExpressionStatement: Expression
+			// Note: arr[0] = 5 is parsed as an expression, then converted to IndexAssignment in converter
 			SYM_EXPRESSION_STATEMENT: grammar.SynSequence{
 				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
 			},
@@ -223,6 +256,30 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
 			},
 
+			// IndexAssignment: IDENTIFIER IndexChain EQUALS Expression
+			// Handles: arr[0] = 5, matrix[i][j] = 10
+			SYM_INDEX_ASSIGNMENT: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+				grammar.NonTerminal{Symbol: SYM_INDEX_CHAIN},
+				grammar.Terminal{TokenType: TOKEN_EQUALS},
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+			},
+
+			// IndexChain: LBRACKET Expression RBRACKET IndexChainRest
+			// Allows single or multiple index access: [0] or [0][1]
+			SYM_INDEX_CHAIN: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_LBRACKET},
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+				grammar.Terminal{TokenType: TOKEN_RBRACKET},
+				grammar.NonTerminal{Symbol: SYM_INDEX_CHAIN_REST},
+			},
+
+			// IndexChainRest: IndexChain | ε
+			SYM_INDEX_CHAIN_REST: grammar.SynAlternative{
+				grammar.NonTerminal{Symbol: SYM_INDEX_CHAIN},
+				grammar.SynSequence{}, // epsilon
+			},
+
 			// Block: LBRACE BlockStatements RBRACE
 			SYM_BLOCK: grammar.SynSequence{
 				grammar.Terminal{TokenType: TOKEN_LBRACE},
@@ -253,11 +310,11 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.SynSequence{}, // epsilon - allows last statement without trailing newline
 			},
 
-			// Expression: LogicalOr | FunctionLiteral
+			// Expression: Assignment | FunctionLiteral
 			// FunctionLiteral is at this level (not in Primary) to avoid LL(1) conflict with FunctionDef at top level
 			SYM_EXPRESSION: grammar.SynAlternative{
 				grammar.SynSequence{
-					grammar.NonTerminal{Symbol: SYM_LOGICAL_OR},
+					grammar.NonTerminal{Symbol: SYM_ASSIGNMENT},
 				},
 				grammar.NonTerminal{Symbol: SYM_FUNCTION_LITERAL},
 			},
@@ -400,7 +457,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_MINUS},
 			},
 
-			// Primary: IDENTIFIER PrimaryRest | Literal | LPAREN Expression RPAREN
+			// Primary: IDENTIFIER PrimaryRest | Literal | ArrayLiteral | LPAREN Expression RPAREN
 			// NOTE: FunctionLiteral removed to avoid LL(1) conflict with FunctionDef at top level
 			SYM_PRIMARY: grammar.SynAlternative{
 				grammar.SynSequence{
@@ -408,6 +465,7 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 					grammar.NonTerminal{Symbol: SYM_PRIMARY_REST},
 				},
 				grammar.NonTerminal{Symbol: SYM_LITERAL},
+				grammar.NonTerminal{Symbol: SYM_ARRAY_LITERAL},
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_LPAREN},
 					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
@@ -415,12 +473,26 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				},
 			},
 
-			// PrimaryRest: LPAREN Arguments RPAREN | ε
+			// PrimaryRest: LPAREN Arguments RPAREN | LBRACKET Expression RBRACKET | DOT IDENTIFIER PrimaryRest | ε
 			SYM_PRIMARY_REST: grammar.SynAlternative{
+				// Function call: LPAREN Arguments RPAREN
 				grammar.SynSequence{
 					grammar.Terminal{TokenType: TOKEN_LPAREN},
 					grammar.NonTerminal{Symbol: SYM_ARGUMENTS},
 					grammar.Terminal{TokenType: TOKEN_RPAREN},
+				},
+				// Index access: LBRACKET Expression RBRACKET PrimaryRest (allows chaining like arr[0][1])
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_LBRACKET},
+					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+					grammar.Terminal{TokenType: TOKEN_RBRACKET},
+					grammar.NonTerminal{Symbol: SYM_PRIMARY_REST},
+				},
+				// Member access: DOT IDENTIFIER PrimaryRest (allows chaining like arr.len() or arr.something[0])
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_DOT},
+					grammar.Terminal{TokenType: TOKEN_IDENTIFIER},
+					grammar.NonTerminal{Symbol: SYM_PRIMARY_REST},
 				},
 				grammar.SynSequence{}, // epsilon
 			},
@@ -470,6 +542,36 @@ func GetSyntacticGrammar() grammar.SyntacticGrammar {
 				grammar.Terminal{TokenType: TOKEN_FALSE},
 				grammar.Terminal{TokenType: TOKEN_STRING},
 				grammar.Terminal{TokenType: TOKEN_RAW_STRING},
+			},
+
+			// ArrayLiteral: LBRACKET ElementList RBRACKET | LBRACKET RBRACKET
+			// ArrayLiteral: LBRACKET ArrayContent RBRACKET
+			SYM_ARRAY_LITERAL: grammar.SynSequence{
+				grammar.Terminal{TokenType: TOKEN_LBRACKET},
+				grammar.NonTerminal{Symbol: SYM_ARRAY_CONTENT},
+				grammar.Terminal{TokenType: TOKEN_RBRACKET},
+			},
+
+			// ArrayContent: ElementList | ε
+			SYM_ARRAY_CONTENT: grammar.SynAlternative{
+				grammar.NonTerminal{Symbol: SYM_ELEMENT_LIST},
+				grammar.SynSequence{}, // epsilon for empty array
+			},
+
+			// ElementList: Expression ElementRest
+			SYM_ELEMENT_LIST: grammar.SynSequence{
+				grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+				grammar.NonTerminal{Symbol: SYM_ELEMENT_REST},
+			},
+
+			// ElementRest: COMMA Expression ElementRest | ε
+			SYM_ELEMENT_REST: grammar.SynAlternative{
+				grammar.SynSequence{
+					grammar.Terminal{TokenType: TOKEN_COMMA},
+					grammar.NonTerminal{Symbol: SYM_EXPRESSION},
+					grammar.NonTerminal{Symbol: SYM_ELEMENT_REST},
+				},
+				grammar.SynSequence{}, // epsilon
 			},
 		},
 	}

@@ -50,11 +50,14 @@ const (
 	TOKEN_EQUALS grammar.TokenType = "EQUALS" // =
 
 	// Punctuation
-	TOKEN_LPAREN grammar.TokenType = "LPAREN" // (
-	TOKEN_RPAREN grammar.TokenType = "RPAREN" // )
-	TOKEN_LBRACE grammar.TokenType = "LBRACE" // {
-	TOKEN_RBRACE grammar.TokenType = "RBRACE" // }
-	TOKEN_COMMA  grammar.TokenType = "COMMA"  // ,
+	TOKEN_LPAREN   grammar.TokenType = "LPAREN"   // (
+	TOKEN_RPAREN   grammar.TokenType = "RPAREN"   // )
+	TOKEN_LBRACE   grammar.TokenType = "LBRACE"   // {
+	TOKEN_RBRACE   grammar.TokenType = "RBRACE"   // }
+	TOKEN_LBRACKET grammar.TokenType = "LBRACKET" // [
+	TOKEN_RBRACKET grammar.TokenType = "RBRACKET" // ]
+	TOKEN_COMMA    grammar.TokenType = "COMMA"    // ,
+	TOKEN_DOT      grammar.TokenType = "DOT"      // .
 
 	// Whitespace and separators
 	TOKEN_NEWLINE    grammar.TokenType = "NEWLINE"    // \n (statement separator)
@@ -383,6 +386,21 @@ func GetLexicalGrammar() grammar.LexicalGrammar {
 			{
 				Name:     TOKEN_RBRACE,
 				Pattern:  grammar.Literal("}"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_LBRACKET,
+				Pattern:  grammar.Literal("["),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_RBRACKET,
+				Pattern:  grammar.Literal("]"),
+				Priority: 1,
+			},
+			{
+				Name:     TOKEN_DOT,
+				Pattern:  grammar.Literal("."),
 				Priority: 1,
 			},
 

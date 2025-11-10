@@ -1,0 +1,53 @@
+let empty = []
+println("Empty array length:")
+println(empty.len())
+
+let numbers = [1, 2, 3, 4, 5]
+println("Numbers array:")
+println(numbers)
+
+println("Length of numbers:")
+println(numbers.len())
+
+println("First element:")
+println(numbers[0])
+println("Third element:")
+println(numbers[2])
+
+numbers[0] = 100
+println("After setting first element to 100:")
+println(numbers)
+
+let mixed = [42, 3.14, "hello", true]
+println("Mixed type array:")
+println(mixed)
+println(mixed[0])
+println(mixed[1])
+println(mixed[2])
+println(mixed[3])
+
+numbers.push(99)
+println("After pushing 99:")
+println(numbers)
+println("New length:")
+println(numbers.len())
+
+let last = numbers.pop()
+println("Popped value:")
+println(last)
+println("After pop:")
+println(numbers)
+println("New length:")
+println(numbers.len())
+
+let matrix = [[1, 2], [3, 4]]
+println("Matrix:")
+println(matrix)
+println("First row:")
+println(matrix[0])
+println("Element at [1][0]:")
+println(matrix[1][0])
+
+matrix[0][1] = 99
+println("After setting matrix[0][1] to 99:")
+println(matrix)

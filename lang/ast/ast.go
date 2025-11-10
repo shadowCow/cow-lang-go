@@ -179,3 +179,49 @@ type FunctionLiteral struct {
 
 func (fl *FunctionLiteral) expressionNode()      {}
 func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token }
+
+// ArrayLiteral represents an array literal expression.
+// Syntax: [elem1, elem2, ...] or []
+type ArrayLiteral struct {
+	Token    string       // The '[' token
+	Elements []Expression // The array elements
+}
+
+func (al *ArrayLiteral) expressionNode()      {}
+func (al *ArrayLiteral) TokenLiteral() string { return al.Token }
+
+// IndexAccess represents array/collection indexing.
+// Syntax: arr[index]
+// The Object will typically be an Identifier or another IndexAccess (for multi-dimensional arrays).
+type IndexAccess struct {
+	Token  string     // The '[' token
+	Object Expression // The array/object being indexed
+	Index  Expression // The index expression
+}
+
+func (ia *IndexAccess) expressionNode()      {}
+func (ia *IndexAccess) TokenLiteral() string { return ia.Token }
+
+// MemberAccess represents accessing a member/method of an object.
+// Syntax: obj.member
+// Used for array methods like arr.len(), arr.push(item), arr.pop()
+type MemberAccess struct {
+	Token  string     // The '.' token
+	Object Expression // The object being accessed
+	Member string     // The member name
+}
+
+func (ma *MemberAccess) expressionNode()      {}
+func (ma *MemberAccess) TokenLiteral() string { return ma.Token }
+
+// IndexAssignment represents assignment to an array index.
+// Syntax: arr[index] = value or arr[i][j] = value
+type IndexAssignment struct {
+	Token   string       // The identifier token
+	Name    string       // The array variable name
+	Indices []Expression // The index expressions (one for arr[0], multiple for arr[i][j])
+	Value   Expression   // The value to assign
+}
+
+func (ia *IndexAssignment) statementNode()       {}
+func (ia *IndexAssignment) TokenLiteral() string { return ia.Token }
